@@ -1,0 +1,42 @@
+{
+  "exp_id": "ESR_1D_CNN-transformer_doReFa",
+  "feature_type": "RawSignal",
+  "add_channel_dim": "False",
+
+  "dataset_type": "ESR",
+  "binarizeDS": true,
+
+  "in_channels": 1,
+
+  "lr": 1e-3,
+  "nb_repetitions": 1,
+  "batch_size_train": 64,
+  "batch_size_test": 64,
+  "weight_decay": 0,
+  "nb_epochs": 150,
+  "loss_function": "CE",
+  "warmup": 4000,
+
+  "trained_fp_models_folder": "../../results/ESR_1D_CNN-transformer_FP/model/",
+
+  "model_type": "Transformer",
+  "model_to_use": "RawAudioMultiChannelCNN",
+  "nhead": 4,
+  "d_hid": 8,
+  "nlayers": 4,
+  "dropout": 0.3,
+  "nb_features_projection": 4,
+  "d_model": 64,
+  "classification_pool": "ClassToken",
+  "n_conv_layers": 2,
+  "pos_encoder_type": "Original",
+
+  "do_normalization_weights": false,
+
+  "device": "cuda:0",
+  "balance_dataset": false,
+  "compute_class_weights": true,
+  "separate_val_ds": false,
+  "percentage_samples_keep": 1.0,
+  "dataset_folder": "../../data/EEG_Epileptic_Seizure_Recognition/"
+}

@@ -1,0 +1,7 @@
+data/EEG_Epileptic_Seizure_Recognition/
+data/MNIST/
+results/*ESR*
+results/*MNIST*
+*__pycache__*
+*.pyc
+access_token.txt

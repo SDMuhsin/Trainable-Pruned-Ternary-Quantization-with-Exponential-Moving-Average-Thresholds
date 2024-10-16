@@ -1,0 +1,33 @@
+{
+  "exp_id": "MNIST_2D_CNN_pTTQ",
+
+  "lr": 5e-6,
+  "lr_wn_wp": 5e-6,
+  "lr_thresh": 5e-6,
+  "nb_repetitions": 1,
+  "batch_size_train": 32,
+  "batch_size_test": 32,
+  "weight_decay": 0,
+  "nb_epochs": 50,
+  "loss_function": "CE",
+
+  "optimizer_pruning_params": "Adamax",
+  "pruning_function_type": "manessi_asymmetric_pTTQ",
+  "alpha": 1e4,
+  "init_x": 1.0,
+  "init_y": 1.0,
+  "optimize_alpha": false,
+  "trained_fp_models_folder": "../../results/MNIST_2D_CNN_FP/model/",
+
+  "model_type": "2DCNN",
+  "model_to_use": "Mnist2DCnn",
+  "do_normalization_weights": false,
+
+  "device": "cpu",
+  "balance_dataset": false,
+  "compute_class_weights": false,
+  "separate_val_ds": false,
+  "dataset_type": "MNIST",
+  "percentage_samples_keep": 0.1,
+  "dataset_folder": "../../data/MNIST/"
+}

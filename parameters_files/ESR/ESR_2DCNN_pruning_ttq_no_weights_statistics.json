@@ -1,0 +1,45 @@
+{
+  "exp_id": "ESR_2DCNN_pTTQ_No_Weights_Statistics",
+  "feature_type": "Spectrogram",
+  "add_channel_dim": "True",
+
+  "dataset_type": "EEGEpilepticSeizure",
+  "binarizeDS": true,
+
+  "n_fft": 32,
+  "n_overlap": 4,
+  "window": "blackman",
+
+  "lr": 1e-3,
+  "lr_wn_wp": 1e-3,
+  "lr_thresh": 1e-2,
+  "nb_repetitions": 1,
+  "batch_size_train": 32,
+  "batch_size_test": 32,
+  "weight_decay": 1e-7,
+  "nb_epochs": 50,
+  "loss_function": "CE",
+
+  "pruning_function_type": "manessi_asymmetric",
+  "alpha": 1e2,
+  "init_x": 1.0,
+  "init_y": 1.0,
+  "optimize_alpha": false,
+  "trained_fp_models_folder": "../../results/ESR_2D_CNN_FP/model/",
+
+  "model_type": "2DCNN",
+  "model_to_use": "TimeFrequency2DCNN",
+  "nb_init_filters": 64,
+  "increase_nb_filters_mode": "multiplicative",
+  "pooling_mode": "maxpool",
+  "dropout_probability": 0.2,
+
+  "do_normalization_weights": false,
+
+  "device": "cuda:0",
+  "balance_dataset": false,
+  "compute_class_weights": true,
+  "separate_val_ds": false,
+  "percentage_samples_keep": 1.0,
+  "dataset_folder": "../../data/EEG_Epileptic_Seizure_Recognition/"
+}

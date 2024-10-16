@@ -1,0 +1,25 @@
+{
+  "exp_id": "MNIST_2D_CNN_DoReFa",
+
+  "lr": 1e-3,
+  "nb_repetitions": 10,
+  "batch_size_train": 32,
+  "batch_size_test": 32,
+  "weight_decay": 0,
+  "nb_epochs": 100,
+  "loss_function": "CE",
+
+  "trained_fp_models_folder": "../../results/MNIST_2D_CNN_FP/model/",
+
+  "model_type": "2DCNN",
+  "model_to_use": "Mnist2DCnn",
+  "do_normalization_weights": false,
+
+  "device": "cpu",
+  "balance_dataset": false,
+  "compute_class_weights": false,
+  "separate_val_ds": false,
+  "dataset_type": "MNIST",
+  "percentage_samples_keep": 0.1,
+  "dataset_folder": "../../../data/MNIST/"
+}

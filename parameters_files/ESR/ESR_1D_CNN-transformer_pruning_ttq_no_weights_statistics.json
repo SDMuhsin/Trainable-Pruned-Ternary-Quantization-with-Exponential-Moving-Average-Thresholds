@@ -1,0 +1,49 @@
+{
+  "exp_id": "ESR_1D_CNN-transformer_pTTQ_No_Weights_Statistics",
+  "feature_type": "RawSignal",
+  "add_channel_dim": "False",
+
+  "dataset_type": "EEGEpilepticSeizure",
+  "binarizeDS": true,
+
+  "in_channels": 1,
+
+  "lr": 5e-4,
+  "lr_wn_wp": 5e-4,
+  "lr_thresh": 5e-4,
+  "nb_repetitions": 1,
+  "batch_size_train": 32,
+  "batch_size_test": 32,
+  "weight_decay": 0,
+  "nb_epochs": 150,
+  "loss_function": "CE",
+  "warmup": 4000,
+
+  "pruning_function_type": "manessi_asymmetric",
+  "alpha": 1e4,
+  "init_x": 0.5,
+  "init_y": 0.5,
+  "optimize_alpha": false,
+  "trained_fp_models_folder": "../../results/ESR_1D_CNN-transformer_FP/model/",
+
+  "model_type": "Transformer",
+  "model_to_use": "RawAudioMultiChannelCNN",
+  "nhead": 4,
+  "d_hid": 8,
+  "nlayers": 4,
+  "dropout": 0.3,
+  "nb_features_projection": 4,
+  "d_model": 64,
+  "classification_pool": "ClassToken",
+  "n_conv_layers": 2,
+  "pos_encoder_type": "Original",
+
+  "do_normalization_weights": false,
+
+  "device": "cuda:0",
+  "balance_dataset": false,
+  "compute_class_weights": true,
+  "separate_val_ds": false,
+  "percentage_samples_keep": 1.0,
+  "dataset_folder": "../../data/EEG_Epileptic_Seizure_Recognition/"
+}
