@@ -10,7 +10,7 @@
   "loss_function": "CE",
 
   "t": 0.05,
-  "trained_fp_models_folder": "../../results/MNIST_2D_CNN_FP/model/",
+  "trained_fp_models_folder": "./results/MNIST_2D_CNN_FP_16.10.2024_07:18:06_0/model/",
 
   "model_type": "2DCNN",
   "model_to_use": "Mnist2DCnn",
@@ -22,5 +22,5 @@
   "separate_val_ds": false,
   "dataset_type": "MNIST",
   "percentage_samples_keep": 0.1,
-  "dataset_folder": "../../data/MNIST/"
+  "dataset_folder": "./data/MNIST/"
 }
