@@ -124,6 +124,19 @@ class Experiment(ExperimentTTQ):
 
 
     # Quantization function
+
+    def quantize(self, kernel, w_p, w_n):
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        
+        # Calculate adaptive thresholds
+        pos_threshold = torch.mean(pruned_kernel[pruned_kernel > 0])
+        neg_threshold = torch.mean(pruned_kernel[pruned_kernel < 0])
+        
+        A = (pruned_kernel > pos_threshold).float()
+        B = (pruned_kernel < neg_threshold).float()
+        
+        return w_p*A + (-w_n*B)
+
     def quantize(self, kernel, w_p, w_n):
         """
         Function from inspired from https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
@@ -159,9 +172,13 @@ class Experiment(ExperimentTTQ):
         """
         # Grads of w_p and w_n
         pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
-        A = (pruned_kernel > 0).float()
-        B = (pruned_kernel < 0).float()
+        pos_threshold = torch.mean(pruned_kernel[pruned_kernel > 0])
+        neg_threshold = torch.mean(pruned_kernel[pruned_kernel < 0])
+        
+        A = (pruned_kernel > pos_threshold).float()
+        B = (pruned_kernel < neg_threshold).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
+
         grad_fp_kernel = w_p*A*kernel_grad + w_n*B*kernel_grad + 1.0*c*kernel_grad
         grad_wp = (A*kernel_grad).sum()
         grad_wn = (B*kernel_grad).sum()
@@ -222,16 +239,16 @@ class Experiment(ExperimentTTQ):
         self.optimizer = torch.optim.Adamax([model_params_dict[group_name] for group_name in model_params_dict], lr=self.lr)
         if (self.model_type.lower() != 'transformer'):
             # Creating the learning rate scheduler for the global optimizer
-            self.sched = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',\
-                                                               factor=0.1, patience=5,\
-                                                               threshold=1e-4, threshold_mode='rel',\
+            self.sched = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
+                                                               factor=0.1, patience=5,
+                                                               threshold=1e-4, threshold_mode='rel',
                                                                cooldown=0, min_lr=0, eps=1e-08, verbose=False)
 
         # Copy the full precision weights of the parameters that are going to be
         # quantized (so not all the FP weights)
-        kernels_to_quantize_fp_copy = [ Variable(kernel.data.clone(), requires_grad=True) for kernel in model_params_dict['ToQuantize']['params']]
+        kernels_to_quantize_fp_copy = [Variable(kernel.data.clone(), requires_grad=True) for kernel in model_params_dict['ToQuantize']['params']]
 
-        # Scaling factors for each quantized layer
+        # Learnable scaling factors for each quantized layer
         initial_scaling_factors = []
 
         # Initial thresholds
@@ -248,7 +265,9 @@ class Experiment(ExperimentTTQ):
         for k, k_fp in zip(kernels_to_quantize, kernels_to_quantize_fp_copy):
             # Getting the initial scaling factors
             w_p_initial, w_n_initial = self.initial_scales(k_fp.data)
-            initial_scaling_factors += [(w_p_initial, w_n_initial)]
+            initial_scaling_factors.append(
+                Variable(torch.FloatTensor([w_p_initial, w_n_initial]).to(self.device), requires_grad=True)
+            )
 
             # Getting the initial thresholds
             self.a, self.b = self.initial_thresholds(k_fp.data)
@@ -267,11 +286,7 @@ class Experiment(ExperimentTTQ):
         # FP kernels
         self.optimizer_fp = torch.optim.Adamax(kernels_to_quantize_fp_copy, lr=self.lr)
         # Scaling factors
-        self.optimizer_sf = torch.optim.Adamax(
-                                            [Variable(torch.FloatTensor([w_p, w_n]).to(self.device), requires_grad=True)
-                                             for w_p, w_n in initial_scaling_factors],
-                                            lr=self.lr_wn_wp
-                                         )
+        self.optimizer_sf = torch.optim.Adamax(initial_scaling_factors, lr=self.lr_wn_wp)
         # Thresholds
         self.optimizer_t = self.optimizer_pruning_params(
                                             [Variable(torch.FloatTensor([x, y]).to(self.device), requires_grad=True)
@@ -279,7 +294,6 @@ class Experiment(ExperimentTTQ):
                                             lr=self.lr_thresh
                                          )
         self.sched_t = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_t, T_max=10, eta_min=1e-7, last_epoch=-1, verbose=True)
-
 
         # Alpha value
         if (self.optimize_alpha):
