@@ -8,7 +8,7 @@
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 50,
+  "nb_epochs": 100,
   "loss_function": "CE",
 
   "optimizer_pruning_params": "Adamax",

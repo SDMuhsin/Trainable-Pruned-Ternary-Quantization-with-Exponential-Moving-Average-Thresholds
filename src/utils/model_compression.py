@@ -303,6 +303,7 @@ def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, current_epoch, total_epoc
     total_epochs: int
         Total number of training epochs.
     """
+
     # Defining the ReLU and Sigmoid functions
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
@@ -312,7 +313,7 @@ def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, current_epoch, total_epoc
     
     # Annealing schedule for pruning threshold
     annealing_factor = 1 - (current_epoch / total_epochs)**2
-
+    print(f"-- | Current epoch : {current_epoch}/ {total_epochs} | Annealing factor : {annealing_factor} | Sparsity factor : {sparsity_factor} | --",end='\r')
     # Defining the thresholds
     x_mean, x_std = x.mean(), x.std()
     delta_min = (x_mean + t_min * x_std).abs() * annealing_factor
