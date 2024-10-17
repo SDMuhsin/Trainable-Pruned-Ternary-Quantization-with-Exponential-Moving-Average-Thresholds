@@ -294,6 +294,55 @@ class Experiment(object):
             if (self.separate_val_ds):
                 self.val_ds = MNISTDatasetWrapper(data=self.val_data)
             self.test_ds = MNISTDatasetWrapper(data=self.testing_data)
+        elif (self.dataset_type.lower() == 'fmnist'):
+            # Transformations to apply to the dataset
+            transform = torchvision.transforms.Compose(
+                                                        [
+                                                            torchvision.transforms.CenterCrop(20),
+                                                            torchvision.transforms.ToTensor()
+                                                        ]
+                                                      )
+
+            # Retrieving the training dataset
+            self.training_data = torchvision.datasets.FashionMNIST(
+                                                                    root=parameters_exp['dataset_folder'],
+                                                                    train=True,
+                                                                    transform=transform,
+                                                                    download=True
+            )
+            # Keeping only a percentage of samples
+            print("Original number of training samples (FashionMNIST): {}".format(len(self.training_data)))
+            nb_samples_keep = int(self.percentage_samples_keep*len(self.training_data))
+            self.training_data = [self.training_data[i] for i in range(len(self.training_data)) if i < nb_samples_keep]
+            print('New number of training samples (FashionMNIST): {}'.format(len(self.training_data)))
+            # Putting the dataset under the right format
+            self.training_data = put_MNIST_data_generic_form(self.training_data)
+
+            # Splitting the train data into train and validation
+            if (self.separate_val_ds):
+                train_val_splits = train_val_split_stratified(self.training_data, n_splits=1, test_size=0.2)[0]
+                self.training_data, self.val_data = train_val_splits['Train'], train_val_splits['Validation']
+
+            # Retrieving the test dataset
+            self.testing_data = torchvision.datasets.FashionMNIST(
+                                                                    root=parameters_exp['dataset_folder'],
+                                                                    train=False,
+                                                                    transform=transform,
+                                                                    download=True
+                                                            )
+            self.testing_data = put_MNIST_data_generic_form(self.testing_data)
+
+            # Balance training dataset (TO BE DONE AFTER NOISE to be realistic)
+            # It is done ONLY ON THE TRAINING DATA
+            if (self.balance_dataset):
+                self.training_data, nb_samples_per_class = balance_dataset(self.training_data, dataset_type=self.dataset_type, balance_strategy=self.balance_strategy)
+                print("\nAFTER RESAMPLING we have {} training samples. Number of samples per class: {}".format(len(self.training_data), nb_samples_per_class))
+
+            # Creating the pytorch datasets
+            self.train_ds = MNISTDatasetWrapper(data=self.training_data)
+            if (self.separate_val_ds):
+                self.val_ds = MNISTDatasetWrapper(data=self.val_data)
+            self.test_ds = MNISTDatasetWrapper(data=self.testing_data)
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
         print("Number of samples in the training dataset: ", len(self.train_ds))
@@ -359,6 +408,8 @@ class Experiment(object):
                                                  )
         elif (self.dataset_type.lower() == 'mnist'):
             pass
+        elif (self.dataset_type.lower() == 'fmnist'):
+            pass
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
         print("Number of samples in the training dataset: ", len(self.train_ds))
@@ -403,7 +454,7 @@ class Experiment(object):
         """
         # Creating the model
         if (self.model_type.lower() == '2dcnn'):
-            if (self.model_to_use.lower() == 'mnist2dcnn'):
+            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):

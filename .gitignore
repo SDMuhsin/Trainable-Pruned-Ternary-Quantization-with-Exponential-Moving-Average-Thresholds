@@ -1,7 +1,9 @@
 data/EEG_Epileptic_Seizure_Recognition/
 data/MNIST/
+data/FMNIST
 results/*ESR*
 results/*MNIST*
+results/*FMNIST*
 *__pycache__*
 *.pyc
 access_token.txt
