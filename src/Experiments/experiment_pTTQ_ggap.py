@@ -163,9 +163,23 @@ class Experiment(ExperimentTTQ):
         return w_p*A + (-w_n*B)
 
     # Quantization function
+    #def quantize(self, kernel, w_p, w_n):
+    #    print(f"INSIDE QTZ")
+    #    return self.gradient_guided_adaptive_pruning(kernel, w_p, w_n)
     def quantize(self, kernel, w_p, w_n):
-        print(f"INSIDE QTZ")
-        return self.gradient_guided_adaptive_pruning(kernel, w_p, w_n)
+        """
+        Function from inspired from https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
+        ATTENTION: it is not the same function as we change the method to quantize
+        the weights.
+
+        Return quantized weights of a layer.
+        Only possible values of quantized weights are: {zero, w_p, -w_n}.
+        """
+        # Getting the pruned kernel
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        A = (pruned_kernel > 0).float()
+        B = (pruned_kernel < 0).float()
+        return w_p*A + (-w_n*B)
 
     # Gradients computation
     def get_grads(self, kernel_grad, kernel, w_p, w_n):
@@ -369,6 +383,14 @@ class Experiment(ExperimentTTQ):
         # Getting the alpha value if it is optimized
         if (self.optimize_alpha):
             alphas = self.optimizer_alpha.param_groups[0]['params']
+        
+        # Apply gradient-guided pruning and requantize
+        for k, k_fp, (w_p, w_n) in zip(quantized_kernels, fp_kernels, scaling_factors):
+            if k.grad is not None:
+                pruned_kernel = self.gradient_guided_adaptive_pruning(k_fp, w_p.item(), w_n.item())
+                k.data = self.quantize(pruned_kernel, w_p.item(), w_n.item())
+            else:
+                print(f"NO GRADD")
 
         for i in range(len(quantized_kernels)):
             # Current quantized kernel
