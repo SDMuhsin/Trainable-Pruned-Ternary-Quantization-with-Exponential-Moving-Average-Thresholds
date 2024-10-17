@@ -6,7 +6,7 @@
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 70,
+  "nb_epochs": 200,
   "loss_function": "CE",
 
   "model_type": "2DCNN",
