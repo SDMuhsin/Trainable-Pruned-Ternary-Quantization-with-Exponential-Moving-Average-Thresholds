@@ -284,6 +284,45 @@ def pruning_function_pTTQ(x, alpha, t_min, t_max):
 
     return res
 
+def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, current_epoch, total_epochs):
+    """
+    Enhanced pruning function with Gradual Sparsity Increase and Annealing (GSIA).
+    
+    Arguments:
+    ----------
+    x: torch.tensor
+        Tensor to 'prune'
+    alpha: float
+        Hyper-parameter defining the 'speed' of the pruning.
+    t_min: float
+        Real parameter used to compute the lower threshold.
+    t_max: float
+        Real parameter used to compute the upper threshold.
+    current_epoch: int
+        Current training epoch.
+    total_epochs: int
+        Total number of training epochs.
+    """
+    # Defining the ReLU and Sigmoid functions
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Gradual sparsity increase factor
+    sparsity_factor = min(1.0, current_epoch / (0.75 * total_epochs))
+    
+    # Annealing schedule for pruning threshold
+    annealing_factor = 1 - (current_epoch / total_epochs)**2
+
+    # Defining the thresholds
+    x_mean, x_std = x.mean(), x.std()
+    delta_min = (x_mean + t_min * x_std).abs() * annealing_factor
+    delta_max = (x_mean + t_max * x_std).abs() * annealing_factor
+
+    # Computing the output with gradual sparsity increase
+    res = relu(x - delta_max) + delta_max * sigmoid(alpha * sparsity_factor * (x - delta_max)) - \
+          relu(-x - delta_min) - delta_min * sigmoid(alpha * sparsity_factor * (-x - delta_min))
+
+    return res
 
 def pruning_function_asymmetric_manessi(x, alpha, a, b):
     """

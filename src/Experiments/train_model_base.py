@@ -138,6 +138,8 @@ class Experiment(object):
         self.batch_size_test = parameters_exp['batch_size_test']
         self.nb_epochs = parameters_exp['nb_epochs']
         self.criterion = None
+        self.current_epoch = 0
+
         if (parameters_exp['loss_function'].lower() == 'ce'):
             self.criterion = torch.nn.CrossEntropyLoss()
         elif (parameters_exp['loss_function'].lower() == 'gce'):
@@ -755,7 +757,7 @@ class Experiment(object):
                 sparsity_rate = 1-(self.non_zero_params/nb_params_to_quantize)
             sparsity_rates_per_epoch.append(sparsity_rate.detach().cpu().numpy())
             print("=======> SPARSITY RATE AT EPOCH {}: {}\n\n\n".format(epoch, sparsity_rate*100))
-
+            self.current_epoch += 1
         return {'Loss': loss_values, 'Predictions': predictions_results, 'SparsityRatePerEpoch': sparsity_rates_per_epoch}
 
     def countNonZeroWeights(self, model):
