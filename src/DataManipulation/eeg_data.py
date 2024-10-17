@@ -349,6 +349,8 @@ def loadFromHDF5_EEG(hdf5_file_path='../../data/EEG_Epileptic_Seizure_Recognitio
     train_data, test_data = {}, {}
 
     # Loading the data
+    print(f"HDF5 file path : ",hdf5_file_path)
+
     h5f = h5py.File(hdf5_file_path, 'r')
     for dataset in h5f:
         # print("Dataset: ", dataset)

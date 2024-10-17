@@ -37,23 +37,23 @@ def download_ESR():
         Downloads the ESR dataset necessary to run the different
         experiments.
     """
-    if (not os.path.exists('../data/EEG_Epileptic_Seizure_Recognition/')):
+    if (not os.path.exists('./data/EEG_Epileptic_Seizure_Recognition/')):
         print("\n=======> Starting download of Esr dataset")
         # Creating the directories
-        os.mkdir('../data/EEG_Epileptic_Seizure_Recognition/')
+        os.mkdir('./data/EEG_Epileptic_Seizure_Recognition/')
 
         # Downloading the different files
         # Data description file
         download_file(
                         file_url='https://www.creatis.insa-lyon.fr/~vindas/aTTQ/data/EEG_Epileptic_Seizure_Recognition/data.hdf5',\
-                        dir_store='../data/EEG_Epileptic_Seizure_Recognition/',\
+                        dir_store='./data/EEG_Epileptic_Seizure_Recognition/',\
                         file_name='data.hdf5',\
                         verbose=False
                     )
         # Data csv file
         download_file(
                         file_url='https://www.creatis.insa-lyon.fr/~vindas/aTTQ/data/EEG_Epileptic_Seizure_Recognition/Epileptic Seizure Recognition.csv',\
-                        dir_store='../data/EEG_Epileptic_Seizure_Recognition/',\
+                        dir_store='./data/EEG_Epileptic_Seizure_Recognition/',\
                         file_name='Epileptic Seizure Recognition.csv',\
                         verbose=False
                     )
