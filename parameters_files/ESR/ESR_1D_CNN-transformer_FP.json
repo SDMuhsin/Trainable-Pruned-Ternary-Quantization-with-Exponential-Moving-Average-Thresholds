@@ -36,5 +36,5 @@
   "compute_class_weights": true,
   "separate_val_ds": false,
   "percentage_samples_keep": 1.0,
-  "dataset_folder": "../../../data/EEG_Epileptic_Seizure_Recognition/"
+  "dataset_folder": "./data/EEG_Epileptic_Seizure_Recognition/"
 }
