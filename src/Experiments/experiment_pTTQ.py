@@ -134,6 +134,7 @@ class Experiment(ExperimentTTQ):
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
         """
         # Getting the pruned kernel
+        print(f"\n\n\nTEST\n\n\n")
         pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
@@ -632,6 +633,8 @@ def main():
             if (parameters_exp['model_to_use'].lower() == 'timefrequency2dcnn'):
                 shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
+                shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+            elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             else:
                 raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))

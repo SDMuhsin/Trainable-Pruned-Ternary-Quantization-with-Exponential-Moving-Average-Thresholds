@@ -142,7 +142,6 @@ class Experiment(ExperimentTTQ):
     def gradient_guided_adaptive_pruning(self, kernel, w_p, w_n):
         if kernel.grad is None:
             return self.initial_magnitude_pruning(kernel, w_p, w_n)
-        
         # Calculate gradient magnitude
         grad_mag = torch.abs(kernel.grad)
         
@@ -152,7 +151,7 @@ class Experiment(ExperimentTTQ):
         
         lower_threshold = grad_mean - 0.5 * grad_std
         upper_threshold = grad_mean + 0.5 * grad_std
-        
+        #print(f" \n\n\n\n L = {lower_threshold}, U = {upper_threshold} \n\n\n\n")
         # Apply pruning based on gradient magnitude
         mask = (grad_mag > lower_threshold) & (grad_mag < upper_threshold)
         pruned_kernel = kernel * mask
@@ -165,6 +164,7 @@ class Experiment(ExperimentTTQ):
 
     # Quantization function
     def quantize(self, kernel, w_p, w_n):
+        print(f"INSIDE QTZ")
         return self.gradient_guided_adaptive_pruning(kernel, w_p, w_n)
 
     # Gradients computation
@@ -289,7 +289,9 @@ class Experiment(ExperimentTTQ):
                 self.alpha = alpha_initial
 
             # Doing quantization
+            print(f"ABOUT TO QUANTIZE ")
             k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial)
+            print(f"DID QUANTIZT")
 
         # Getting the optimizers for the FP kernels and the scaling factors
         # FP kernels
@@ -659,7 +661,7 @@ def main():
         if (parameters_exp['model_type'].lower() == '2dcnn'):
             if (parameters_exp['model_to_use'].lower() == 'timefrequency2dcnn'):
                 shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
-            elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
+            elif (parameters_exp['model_to_use'].lower() in ['mnist2dcnn','fmnist2dcnn']):
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             else:
                 raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))

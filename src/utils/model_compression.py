@@ -132,7 +132,7 @@ def get_params_groups_to_quantize(model, model_to_use):
     #================================2D CNN================================#
     #======================================================================#
     names_params_to_be_quantized = []
-    if (model_to_use.lower() == 'mnist2dcnn'):
+    if (model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
         # Last FC layer
         weights_last_fc = [model.fc2.weight]
 

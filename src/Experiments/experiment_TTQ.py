@@ -324,7 +324,7 @@ class Experiment(ExperimentBase):
                 nonzero += torch.count_nonzero(param)
             else:
                 # Params quantize
-                if (self.model_to_use.lower() == 'mnist2dcnn'):
+                if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                     if ('conv' in name) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
                 elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -349,7 +349,7 @@ class Experiment(ExperimentBase):
                 nb_params_layer *= val
 
             # Nb params quantize
-            if (self.model_to_use.lower() == 'mnist2dcnn'):
+            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 if ('conv' in n) and ('bias' not in n):
                     nb_params_to_quantize += nb_params_layer
             elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
