@@ -137,7 +137,7 @@ class Experiment(ExperimentTTQ):
         
         return w_p*A + (-w_n*B)
 
-    def quantize(self, kernel, w_p, w_n):
+    def quantize_old(self, kernel, w_p, w_n):
         """
         Function from inspired from https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
         ATTENTION: it is not the same function as we change the method to quantize
