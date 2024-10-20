@@ -327,8 +327,31 @@ def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_
           relu(-x - delta_min) - delta_min * sigmoid(alpha * sparsity_factor * (-x - delta_min))
 
     return res
+
+def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, layer_id):
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    x_mean, x_std = x.mean(), x.std()
+    delta_min = (x_mean + t_min*x_std).abs()
+    delta_max = (x_mean + t_max*x_std).abs()
+
+    # Layer-adaptive threshold adjustment
+    layer_factor = 1 + 0.1 * torch.tanh(torch.tensor(layer_id / 10))
+    delta_min *= layer_factor
+    delta_max *= layer_factor
+
+    # Compute pruned weights
+    pruned = relu(x-delta_max) + delta_max*sigmoid(alpha*(x-delta_max)) - \
+             relu(-x-delta_min) - delta_min*sigmoid(alpha*(-x-delta_min))
+
+    # Add regularization term
+    reg_term = 0.01 * torch.sum(torch.abs(pruned)) / torch.sum(torch.abs(x))
+    
+    return pruned, reg_term
+"""
 def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, current_epoch, total_epochs):
-    """
+    
     Enhanced pruning function with Adaptive Sparsity and Gentle Annealing (ASGA).
     
     Arguments:
@@ -345,7 +368,7 @@ def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, current_epoch, total_epoc
         Current training epoch.
     total_epochs: int
         Total number of training epochs.
-    """
+    
     # Defining the ReLU and Sigmoid functions
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
@@ -368,7 +391,7 @@ def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, current_epoch, total_epoc
     # Computing the output with adaptive sparsity
     res = relu(x - delta_max) + delta_max * sigmoid(alpha * sparsity_factor * (x - delta_max)) - \
           relu(-x - delta_min) - delta_min * sigmoid(alpha * sparsity_factor * (-x - delta_min))
-
+"""
 def pruning_function_asymmetric_manessi(x, alpha, a, b):
     """
         Function inspired from the work of Manessi et al. (2019)

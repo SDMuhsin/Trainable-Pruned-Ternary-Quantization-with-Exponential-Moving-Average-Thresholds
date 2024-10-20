@@ -158,7 +158,7 @@ class Experiment(ExperimentTTQ):
         get_parent_attributes(self.__class__, self)
 
     # Quantization function
-    def quantize(self, kernel, w_p, w_n):
+    #REVERT def quantize(self, kernel, w_p, w_n):
         """
         Function from inspired from https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
         ATTENTION: it is not the same function as we change the method to quantize
@@ -168,13 +168,27 @@ class Experiment(ExperimentTTQ):
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
         """
         # Getting the pruned kernel
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b,self.current_epoch,self.nb_epochs)
+        #pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b,self.current_epoch,self.nb_epochs)
+        #A = (pruned_kernel > 0).float()
+        #B = (pruned_kernel < 0).float()
+        #return w_p*A + (-w_n*B)
+    def quantize(self, kernel, w_p, w_n, layer_id):
+        """
+        Function inspired from https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
+        ATTENTION: it is not the same function as we change the method to quantize
+        the weights.
+
+        Return quantized weights of a layer.
+        Only possible values of quantized weights are: {zero, w_p, -w_n}.
+        """
+        # Getting the pruned kernel
+        pruned_kernel, reg_term = self.pruning_function(kernel, self.alpha, self.a, self.b, layer_id)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
-        return w_p*A + (-w_n*B)
+        return w_p*A + (-w_n*B), reg_term
 
     # Gradients computation
-    def get_grads(self, kernel_grad, kernel, w_p, w_n):
+    def get_grads(self, kernel_grad, kernel, w_p, w_n, layer_id):
         """
         Function from: https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
 
@@ -192,7 +206,9 @@ class Experiment(ExperimentTTQ):
             6. gradient for alpha
         """
         # Grads of w_p and w_n
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b,self.current_epoch,self.nb_epochs)
+        #pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b,self.current_epoch,self.nb_epochs)
+        pruned_kernel, reg_term = self.pruning_function(kernel, self.alpha, self.a, self.b, layer_id)
+
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
@@ -256,8 +272,8 @@ class Experiment(ExperimentTTQ):
         
         else:
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
-
-        return grad_fp_kernel, grad_wp, grad_wn, grad_a, grad_b, grad_alpha
+        return grad_fp_kernel, grad_wp, grad_wn, grad_a, grad_b, grad_alpha, reg_term
+        #return grad_fp_kernel, grad_wp, grad_wn, grad_a, grad_b, grad_alpha
 
     def initial_alpha(self, kernel):
         return self.alpha
@@ -296,7 +312,8 @@ class Experiment(ExperimentTTQ):
         kernels_to_quantize = [kernel for kernel in model_params_dict['ToQuantize']['params']]
 
         # Initial Quantization
-        for k, k_fp in zip(kernels_to_quantize, kernels_to_quantize_fp_copy):
+        for layer_id, (k, k_fp) in enumerate(zip(kernels_to_quantize, kernels_to_quantize_fp_copy)):
+        #REVERT for k, k_fp in zip(kernels_to_quantize, kernels_to_quantize_fp_copy):
             # Getting the initial scaling factors
             w_p_initial, w_n_initial = self.initial_scales(k_fp.data)
             initial_scaling_factors += [(w_p_initial, w_n_initial)]
@@ -312,7 +329,8 @@ class Experiment(ExperimentTTQ):
                 self.alpha = alpha_initial
 
             # Doing quantization
-            k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial)
+            #REVERT k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial)
+            k.data, reg_term = self.quantize(k_fp.data, w_p_initial, w_n_initial, layer_id)
 
         # Getting the optimizers for the FP kernels and the scaling factors
         # FP kernels
@@ -359,7 +377,7 @@ class Experiment(ExperimentTTQ):
         # if (self.optimize_alpha):
         #     self.sched_alpha.step()
 
-
+    ''' REVERT
     def optimize_step(self, loss_value):
         """
             Simple optimization step
@@ -486,6 +504,67 @@ class Experiment(ExperimentTTQ):
                 alpha_val = alphas[i]
                 self.alpha = alpha_val.data[0]
             k.data = self.quantize(k_fp.data, w_p, w_n)
+    '''
+
+    def optimize_step(self, loss_value):
+        """
+            Simple optimization step
+        """
+        # Zero grad for all optimizers
+        self.optimizer.zero_grad()
+        self.optimizer_fp.zero_grad()
+        self.optimizer_sf.zero_grad()
+        self.optimizer_t.zero_grad()
+        if (self.optimize_alpha):
+            self.optimizer_alpha.zero_grad()
+
+        # Gradients for the quantized model
+        loss_value.backward()
+
+        # Get the quantized kernels
+        quantized_kernels = self.optimizer.param_groups[1]['params']
+
+        # Get the FP copies of the original kernels
+        fp_kernels = self.optimizer_fp.param_groups[0]['params']
+
+        # Getting the scaling factors of the kernels
+        scaling_factors = self.optimizer_sf.param_groups[0]['params']
+
+        # Getting the thresholds
+        thresholds = self.optimizer_t.param_groups[0]['params']
+
+        # Getting the alpha value if it is optimized
+        if (self.optimize_alpha):
+            alphas = self.optimizer_alpha.param_groups[0]['params']
+
+        # Computing the gradients
+        for layer_id, (qk, fk, sf, th) in enumerate(zip(quantized_kernels, fp_kernels, scaling_factors, thresholds)):
+            if qk.grad is not None:
+                grad_fp, grad_wp, grad_wn, grad_a, grad_b, grad_alpha = self.get_grads(qk.grad.data, fk.data, sf[0].data, sf[1].data, layer_id)
+                
+                # Update gradients
+                fk.grad = grad_fp
+                sf.grad = torch.FloatTensor([grad_wp, grad_wn]).to(self.device)
+                th.grad = torch.FloatTensor([grad_a, grad_b]).to(self.device)
+
+                if (self.optimize_alpha):
+                    alphas[layer_id].grad = torch.FloatTensor([grad_alpha]).to(self.device)
+
+        # Optimization step
+        self.optimizer.step()
+        self.optimizer_fp.step()
+        self.optimizer_sf.step()
+        self.optimizer_t.step()
+        if (self.optimize_alpha):
+            self.optimizer_alpha.step()
+
+        # Quantize the updated full-precision kernels
+        for layer_id, (qk, fk, sf) in enumerate(zip(quantized_kernels, fp_kernels, scaling_factors)):
+            if (self.optimize_alpha):
+                self.alpha = alphas[layer_id].data[0]
+            qk.data = self.quantize(fk.data, sf[0].data, sf[1].data)
+
+        return loss_value
 
     def gridSearch(self):
         """
