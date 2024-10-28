@@ -8,11 +8,11 @@
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 100,
+  "nb_epochs": 50,
   "loss_function": "CE",
 
   "optimizer_pruning_params": "Adamax",
-  "pruning_function_type": "manessi_asymmetric_pTTQ_gsia",
+  "pruning_function_type": "experimental",
   "alpha": 1e4,
   "init_x": 1.0,
   "init_y": 1.0,

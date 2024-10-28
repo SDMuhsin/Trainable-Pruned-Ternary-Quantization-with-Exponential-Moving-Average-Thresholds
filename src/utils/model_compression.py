@@ -327,6 +327,27 @@ def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_
           relu(-x - delta_min) - delta_min * sigmoid(alpha * sparsity_factor * (-x - delta_min))
 
     return res
+def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max):
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Compute statistics
+    x_mean, x_std = x.mean(), x.std()
+    
+    # Compute adaptive thresholds
+    q1, q3 = torch.quantile(x, torch.tensor([0.25, 0.75]))
+    iqr = q3 - q1
+    delta_min = torch.max(x_mean + t_min * x_std, q1 - 1.5 * iqr).abs()
+    delta_max = torch.min(x_mean + t_max * x_std, q3 + 1.5 * iqr).abs()
+
+    # Compute smoothing factor
+    beta = torch.clamp(1 - (delta_max - delta_min) / (2 * x_std), 0.5, 1.0)
+
+    # Apply pruning with smoothed thresholds
+    res = relu(x - beta * delta_max) + beta * delta_max * sigmoid(alpha * (x - beta * delta_max)) - \
+          relu(-x - beta * delta_min) - beta * delta_min * sigmoid(alpha * (-x - beta * delta_min))
+
+    return res
 
 def pruning_function_pTTQ_GSIA(x, alpha, t_min, t_max, layer_id):
     relu = torch.nn.ReLU()
