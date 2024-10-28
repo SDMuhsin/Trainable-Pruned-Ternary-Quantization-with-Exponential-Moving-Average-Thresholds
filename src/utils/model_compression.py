@@ -327,6 +327,38 @@ def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_
           relu(-x - delta_min) - delta_min * sigmoid(alpha * sparsity_factor * (-x - delta_min))
 
     return res
+
+# EMA V3
+def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max):
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Compute statistics
+    x_mean, x_std = x.mean(), x.std()
+    
+    # Compute adaptive thresholds with exponential moving average
+    with torch.no_grad():
+        if not hasattr(pruning_function_pTTQ_experimental, 'ema_min'):
+            pruning_function_pTTQ_experimental.ema_min = (x_mean + t_min * x_std).abs()
+            pruning_function_pTTQ_experimental.ema_max = (x_mean + t_max * x_std).abs()
+        else:
+            beta = 0.9  # EMA decay factor
+            pruning_function_pTTQ_experimental.ema_min = beta * pruning_function_pTTQ_experimental.ema_min + (1 - beta) * (x_mean + t_min * x_std).abs()
+            pruning_function_pTTQ_experimental.ema_max = beta * pruning_function_pTTQ_experimental.ema_max + (1 - beta) * (x_mean + t_max * x_std).abs()
+
+    delta_min = pruning_function_pTTQ_experimental.ema_min
+    delta_max = pruning_function_pTTQ_experimental.ema_max
+
+    # Introduce a tunable constant to temper pruning aggressiveness
+    k = 1  # This value can be adjusted between 0 and 1
+
+    # Apply pruning with adaptive thresholds and tempered aggressiveness
+    res = relu(x - k * delta_max) + k * delta_max * sigmoid(alpha * (x - k * delta_max)) - \
+          relu(-x - k * delta_min) - k * delta_min * sigmoid(alpha * (-x - k * delta_min))
+
+    return res
+
+# EMA V2
 def pruning_function_pTTQ_ema_v2(x, alpha, t_min, t_max):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
@@ -351,7 +383,7 @@ def pruning_function_pTTQ_ema_v2(x, alpha, t_min, t_max):
     return res
 
 # EMA v1
-def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max):
+def pruning_function_pTTQ_v1(x, alpha, t_min, t_max):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
 
