@@ -327,7 +327,37 @@ def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_
           relu(-x - delta_min) - delta_min * sigmoid(alpha * sparsity_factor * (-x - delta_min))
 
     return res
+
 def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max):
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Compute statistics
+    x_mean, x_std = x.mean(), x.std()
+    
+    # Compute adaptive thresholds with exponential moving average
+    with torch.no_grad():
+        if not hasattr(pruning_function_pTTQ_experimental, 'ema_min'):
+            pruning_function_pTTQ_experimental.ema_min = (x_mean + t_min * x_std).abs()
+            pruning_function_pTTQ_experimental.ema_max = (x_mean + t_max * x_std).abs()
+        else:
+            beta = 0.9  # EMA decay factor
+            pruning_function_pTTQ_experimental.ema_min = beta * pruning_function_pTTQ_experimental.ema_min + (1 - beta) * (x_mean + t_min * x_std).abs()
+            pruning_function_pTTQ_experimental.ema_max = beta * pruning_function_pTTQ_experimental.ema_max + (1 - beta) * (x_mean + t_max * x_std).abs()
+
+    delta_min = pruning_function_pTTQ_experimental.ema_min
+    delta_max = pruning_function_pTTQ_experimental.ema_max
+
+    # Compute adaptive alpha
+    alpha_adaptive = alpha * (1 + torch.tanh(x_std - 1))
+
+    # Apply pruning with adaptive thresholds and alpha
+    res = relu(x - delta_max) + delta_max * sigmoid(alpha_adaptive * (x - delta_max)) - \
+          relu(-x - delta_min) - delta_min * sigmoid(alpha_adaptive * (-x - delta_min))
+
+    return res
+
+def pruning_function_pTTQ_adaptive_v2(x, alpha, t_min, t_max):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
 
