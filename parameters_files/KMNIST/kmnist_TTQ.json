@@ -1,7 +1,7 @@
 {
-  "exp_id": "KMNIST_RESNET18_FP",
+  "exp_id": "KMNIST_RESNET18_TTQ",
 
-  "lr": 1e-3,
+  "lr": 1e-4,
   "nb_repetitions": 1,
   "batch_size_train": 32,
   "batch_size_test": 32,
@@ -9,12 +9,14 @@
   "nb_epochs": 50,
   "loss_function": "CE",
 
+  "t": 0.05,
+  "trained_fp_models_folder": "./results/KMNIST_RESNET18_FP_29.10.2024_17:00:57_0/model/",
+
   "model_type": "2DCNN",
   "model_to_use": "kmnistresnet18",
-  "do_normalization_weights": false,
+  "do_normalization_weights": true,
 
   "device": "cuda",
-  "use_soft_labels": false,
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,

@@ -327,6 +327,9 @@ class Experiment(ExperimentBase):
                 if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                     if ('conv' in name) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
+                elif (self.model_to_use.lower() in ['kmnistresnet18']):
+                    if ('conv' in name) and ('bias' not in name):
+                        nonzero += torch.count_nonzero(param)
                 elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
                      if (('conv2' in name) and ('bias' not in name)) or ('transformer' in name and 'linear2.weight' in name):
                          nonzero += torch.count_nonzero(param)
@@ -349,7 +352,7 @@ class Experiment(ExperimentBase):
                 nb_params_layer *= val
 
             # Nb params quantize
-            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
+            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','kmnistresnet18']):
                 if ('conv' in n) and ('bias' not in n):
                     nb_params_to_quantize += nb_params_layer
             elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -461,7 +464,6 @@ def main():
     os.mkdir(resultsFolder)
     exp.setResultsFolder(resultsFolder)
     print("===> Saving the results of the experiment in {}".format(resultsFolder))
-
     # Creating directories for the trained models, the training and testing metrics
     # and the parameters of the model (i.e. the training parameters and the network
     # architecture)
@@ -494,7 +496,6 @@ def main():
     else:
         # Doing grid search
         exp.gridSearch()
-
     # Saving the training parameters in the folder of the results
     inc = 0
     parameters_file = resultsFolder + '/params_exp/params' + '_'
@@ -511,6 +512,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'kmnistresnet18'):
+            shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
 

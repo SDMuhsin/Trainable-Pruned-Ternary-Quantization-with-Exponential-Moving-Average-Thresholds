@@ -1,7 +1,9 @@
 {
-  "exp_id": "KMNIST_RESNET18_FP",
+  "exp_id": "KMNIST_RESNET18",
 
-  "lr": 1e-3,
+  "lr": 5e-6,
+  "lr_wn_wp": 5e-6,
+  "lr_thresh": 5e-6,
   "nb_repetitions": 1,
   "batch_size_train": 32,
   "batch_size_test": 32,
@@ -9,12 +11,19 @@
   "nb_epochs": 50,
   "loss_function": "CE",
 
+  "optimizer_pruning_params": "Adamax",
+  "pruning_function_type": "manessi_asymmetric_pTTQ",
+  "alpha": 1e4,
+  "init_x": 1.0,
+  "init_y": 1.0,
+  "optimize_alpha": false,
+  "trained_fp_models_folder": "./results/KMNIST_RESNET18_FP_29.10.2024_17:00:57_0/model/",
+
   "model_type": "2DCNN",
-  "model_to_use": "kmnistresnet18",
+  "model_to_use": "KMnistresnet18",
   "do_normalization_weights": false,
 
   "device": "cuda",
-  "use_soft_labels": false,
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,

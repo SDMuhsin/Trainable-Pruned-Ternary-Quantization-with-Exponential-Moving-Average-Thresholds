@@ -1,5 +1,5 @@
 {
-  "exp_id": "KMNIST_RESNET18_FP",
+  "exp_id": "KMNIST_RESNET18_DoReFa",
 
   "lr": 1e-3,
   "nb_repetitions": 1,
@@ -9,12 +9,13 @@
   "nb_epochs": 50,
   "loss_function": "CE",
 
+  "trained_fp_models_folder": "./results/KMNIST_RESNET18_FP_29.10.2024_17:00:57_0/model/",
+
   "model_type": "2DCNN",
   "model_to_use": "kmnistresnet18",
   "do_normalization_weights": false,
 
   "device": "cuda",
-  "use_soft_labels": false,
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,

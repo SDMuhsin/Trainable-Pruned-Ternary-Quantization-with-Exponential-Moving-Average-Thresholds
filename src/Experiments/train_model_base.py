@@ -42,7 +42,8 @@ from src.utils.tools import change_data_samples_path, string_to_bool, train_val_
 from src.DataManipulation.mnist_data import put_MNIST_data_generic_form, MNISTDatasetWrapper
 from src.DataManipulation.eeg_data import EEG_EpilepticSeizureRecognition, loadFromHDF5_EEG
 
-from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init
+from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init 
+from src.Models.CNNs.resnet18 import ResNet18ClassificationModel
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
 
@@ -509,9 +510,11 @@ class Experiment(object):
         """
         # Creating the model
         if (self.model_type.lower() == '2dcnn'):
-            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','kmnist2dcnn']):
+            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
+            elif (self.model_to_use.lower() == 'kmnistresnet18'):
+                self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
                 self.nb_init_filters = self.parameters_exp['nb_init_filters']
                 self.increase_nb_filters_mode = self.parameters_exp['increase_nb_filters_mode']
@@ -1000,8 +1003,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
-        elif (parameters_exp['model_to_use'].lower() == 'kmnist2dcnn'):
-            shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')    
+        elif (parameters_exp['model_to_use'].lower() == 'kmnistresnet18'):
+            shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
 

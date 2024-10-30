@@ -285,7 +285,7 @@ class Experiment(ExperimentBase):
                 nonzero += torch.count_nonzero(param)
             else:
                 # More general method
-                if (self.model_to_use.lower() == 'mnist2dcnn')\
+                if (self.model_to_use.lower() in ['mnist2dcnn','kmnistresnet18'])\
                     or (self.model_to_use.lower() == 'rawaudiomultichannelcnn')\
                     or (self.model_to_use.lower() == 'timefrequency2dcnn'):
                         if (name in self.names_params_to_be_quantized):
@@ -307,7 +307,7 @@ class Experiment(ExperimentBase):
                 nb_params_layer *= val
 
             # Nb params quantize
-            if (self.model_to_use.lower() == 'mnist2dcnn')\
+            if (self.model_to_use.lower() in ['mnist2dcnn','kmnistresnet18'])\
                 or (self.model_to_use.lower() == 'rawaudiomultichannelcnn')\
                 or (self.model_to_use.lower() == 'timefrequency2dcnn'):
                     if (n in self.names_params_to_be_quantized):
@@ -389,7 +389,7 @@ def main():
     # Construct the argument parser
     ap = argparse.ArgumentParser()
     # Add the arguments to the parser
-    default_parameters_file = "../../../parameters_files/model_compression/spectrogram.json"
+    default_parameters_file = "./parameters_files/model_compression/spectrogram.json"
     ap.add_argument('--parameters_file', default=default_parameters_file, help="Parameters for the experiment", type=str)
     args = vars(ap.parse_args())
 
@@ -410,7 +410,7 @@ def main():
     # Creating directory to save the results
     inc = 0
     current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
-    resultsFolder = '../../results/' + parameters_exp['exp_id'] + '_' + current_datetime
+    resultsFolder = './results/' + parameters_exp['exp_id'] + '_' + current_datetime
     while (os.path.isdir(resultsFolder+ '_' + str(inc))):
         inc += 1
     resultsFolder = resultsFolder + '_' + str(inc)
@@ -464,15 +464,15 @@ def main():
     # Saving the python file containing the network architecture
     if (parameters_exp['model_type'].lower() == '2dcnn'):
         if (parameters_exp['model_to_use'].lower() == 'timefrequency2dcnn'):
-            shutil.copy2('../Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+            shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
-            shutil.copy2('../Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+            shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
 
     elif (parameters_exp['model_type'].lower() == 'transformer'):
         if (parameters_exp['model_to_use'].lower() == 'rawaudiomultichannelcnn'):
-            shutil.copy2('../Models/Transformers/Transformer_Encoder_RawAudioMultiChannelCNN.py', resultsFolder + '/params_exp/network_architecture.py')
+            shutil.copy2('./src/Models/Transformers/Transformer_Encoder_RawAudioMultiChannelCNN.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError("Transformer type {} is not valid".format(parameters_exp['model_to_use']))
     else:
