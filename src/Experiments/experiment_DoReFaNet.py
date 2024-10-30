@@ -115,6 +115,8 @@ class Experiment(ExperimentBase):
     def get_params_groups_quantization(self):
         # Getting the groups of parameters to quantize
         params, self.names_params_to_be_quantized = get_params_groups_to_quantize(self.model, self.model_to_use)
+
+        assert len(self.names_params_to_be_quantized) > 0 , f"No params to be quantized {self.names_params_to_be_quantized}"
         return params
 
     def load_weights_model(self):
@@ -467,6 +469,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'kmnistresnet18'):
+            shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
 
