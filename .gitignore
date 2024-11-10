@@ -8,3 +8,4 @@ results/*FMNIST*
 *.pyc
 access_token.txt
 env
+downloads
