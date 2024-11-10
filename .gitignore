@@ -7,3 +7,4 @@ results/*FMNIST*
 *__pycache__*
 *.pyc
 access_token.txt
+env
