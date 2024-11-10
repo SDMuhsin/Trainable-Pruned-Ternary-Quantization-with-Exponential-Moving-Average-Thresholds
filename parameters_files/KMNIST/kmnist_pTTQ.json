@@ -10,6 +10,7 @@
   "weight_decay": 0,
   "nb_epochs": 10,
   "loss_function": "CE",
+   "k":1.0,
 
   "optimizer_pruning_params": "Adamax",
   "pruning_function_type": "manessi_asymmetric_pTTQ",
@@ -19,7 +20,7 @@
   "optimize_alpha": false,
   "trained_fp_models_folder_old": "./results/KMNIST_RESNET18_FP_29.10.2024_17:00:57_0/model/",
   "trained_fp_models_folder": "./results/KMNIST_RESNET18_FP_30.10.2024_14:28:15_0/model/",
-
+  
   "model_type": "2DCNN",
   "model_to_use": "KMnistresnet18",
   "do_normalization_weights": false,

@@ -40,7 +40,8 @@ from labml_nn.optimizers import noam
 from src.Experiments.experiment_TTQ import Experiment as ExperimentTTQ
 
 from src.utils.GCE import GeneralizedCrossEntropy
-from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi, pruning_function_pTTQ_experimental
+from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi,pruning_function_pTTQ_experimental
+
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN # Network used for training
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
@@ -93,6 +94,18 @@ class Experiment(ExperimentTTQ):
         self.init_x = parameters_exp['init_x']
         if ('init_y' not in parameters_exp):
             parameters_exp['init_y'] = 5e-1
+
+        if ('k' not in parameters_exp):
+            print("K not found, default to 1.0")
+            parameters_exp['k'] = float(1)
+        else:
+            print("K found ",parameters_exp['k'])
+        self.k = parameters_exp['k']
+
+        self.exp_id += f"_k{self.k}"
+        parameters_exp['exp_id'] = self.exp_id
+
+
         self.init_y = parameters_exp['init_y']
 
         # Pruning function
@@ -136,7 +149,7 @@ class Experiment(ExperimentTTQ):
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
         """
         # Getting the pruned kernel
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b,self.k)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         return w_p*A + (-w_n*B)

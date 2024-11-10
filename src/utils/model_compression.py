@@ -353,7 +353,7 @@ def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_
     return res
 
 # EMA V3
-def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max):
+def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
 
@@ -374,7 +374,7 @@ def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max):
     delta_max = pruning_function_pTTQ_experimental.ema_max
 
     # Introduce a tunable constant to temper pruning aggressiveness
-    k = 1  # This value can be adjusted between 0 and 1
+    #k = 1  # This value can be adjusted between 0 and 1
 
     # Apply pruning with adaptive thresholds and tempered aggressiveness
     res = relu(x - k * delta_max) + k * delta_max * sigmoid(alpha * (x - k * delta_max)) - \
