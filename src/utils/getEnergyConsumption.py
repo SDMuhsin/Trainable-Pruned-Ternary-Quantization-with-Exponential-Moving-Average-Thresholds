@@ -19,6 +19,7 @@ import argparse
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 from src.utils.model_compression import get_params_groups_to_quantize
 
 
@@ -202,7 +203,106 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
         #input_shape = model.fc1(output_encoder.view(-1, 320)).shape # If the input size is (28, 28, 1)
         input_shape = model.fc1(output_encoder.view(-1, 80)).shape # If the input size is (20, 20, 1)
         mult_adds += count_mult_adds_layer_without_zero_ops(model.fc2, input_shape)
+    elif (model_to_use.lower() == 'kmnistresnet18'):
+        # Initial convolution
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
+        
+        # Track shape through initial layers
+        x = model.encoder.conv1(random_input_tensor)
+        x = model.encoder.bn1(x)
+        x = F.relu(x)
+        x = model.encoder.maxpool(x)
+        input_shape = x.shape
 
+        # Layer 1 (2 basic blocks)
+        for block in model.encoder.layer1:
+            # Save input shape for shortcut
+            shortcut_shape = input_shape
+            
+            # First conv block
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, input_shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+            input_shape = x.shape
+            
+            # Second conv block
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, input_shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+            
+            # Shortcut
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+                
+            x = F.relu(x)
+            input_shape = x.shape
+
+        # Layer 2 (2 basic blocks)
+        for block in model.encoder.layer2:
+            shortcut_shape = input_shape
+            
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, input_shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+            input_shape = x.shape
+            
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, input_shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+            
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+                
+            x = F.relu(x)
+            input_shape = x.shape
+
+        # Layer 3 (2 basic blocks)
+        for block in model.encoder.layer3:
+            shortcut_shape = input_shape
+            
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, input_shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+            input_shape = x.shape
+            
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, input_shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+            
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+                
+            x = F.relu(x)
+            input_shape = x.shape
+
+        # Layer 4 (2 basic blocks)
+        for block in model.encoder.layer4:
+            shortcut_shape = input_shape
+            
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, input_shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+            input_shape = x.shape
+            
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, input_shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+            
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+                
+            x = F.relu(x)
+            input_shape = x.shape
+
+        # Final classifier
+        x = model.avgpool(x)
+        x = torch.flatten(x, 1)
+        input_shape = x.shape
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.fc, input_shape)
     elif (model_to_use.lower() == 'rawaudiomultichannelcnn'):
         # WARNING: WE DO NOT TAKE INTO ACCOUNT THE COMPUTATION OF THE POSITIONAL ENCODING
 
@@ -522,7 +622,7 @@ def main():
     model_to_use = params['model_to_use']
     dataset_type = params['dataset_type']
     bs = 1
-    if (model_to_use.lower() == 'mnist2dcnn'):
+    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18']):
         input_shape = (bs, 1, 20, 20)
     elif (model_to_use.lower() == 'rawaudiomultichannelcnn'):
         if (dataset_type.lower() == 'hits'):

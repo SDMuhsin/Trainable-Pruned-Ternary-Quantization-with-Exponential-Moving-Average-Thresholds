@@ -2,11 +2,11 @@
   "exp_id": "KMNIST_RESNET18_FP",
 
   "lr": 1e-3,
-  "nb_repetitions": 1,
+  "nb_repetitions": 5,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 50,
+  "nb_epochs": 10,
   "loss_function": "CE",
 
   "model_type": "2DCNN",

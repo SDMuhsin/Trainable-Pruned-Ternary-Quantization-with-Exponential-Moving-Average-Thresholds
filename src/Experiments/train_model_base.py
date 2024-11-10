@@ -718,6 +718,7 @@ class Experiment(object):
 
         # Epochs
         sparsity_rates_per_epoch = []
+        test_mcc_per_epoch = []
         for epoch in tqdm(range(self.nb_epochs)):
             # Hyperparams optimization usin Simulated Annealing
             if (self.do_hyperparams_opt) and (epoch == 0):
@@ -799,7 +800,7 @@ class Experiment(object):
                     print("\t\tVal MCC at epoch {} is {}".format(epoch, matthews_corrcoef(predictions_results['Val']['TrueLabels'][epoch], predictions_results['Val']['PredictedLabels'][epoch])))
                 print("\t\tTest MCC at epoch {} is {}".format(epoch, matthews_corrcoef(predictions_results['Test']['TrueLabels'][epoch], predictions_results['Test']['PredictedLabels'][epoch])))
                 print("================================================================================\n\n")
-
+                test_mcc_per_epoch.append(  matthews_corrcoef(predictions_results['Test']['TrueLabels'][epoch], predictions_results['Test']['PredictedLabels'][epoch]) )
             # Saving the model and the current results
             current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
 
@@ -814,7 +815,8 @@ class Experiment(object):
             sparsity_rates_per_epoch.append(sparsity_rate.detach().cpu().numpy())
             print("=======> SPARSITY RATE AT EPOCH {}: {}\n\n\n".format(epoch, sparsity_rate*100))
             self.current_epoch += 1
-        return {'Loss': loss_values, 'Predictions': predictions_results, 'SparsityRatePerEpoch': sparsity_rates_per_epoch}
+
+        return {'Loss': loss_values, 'Predictions': predictions_results, 'SparsityRatePerEpoch': sparsity_rates_per_epoch,'TestMccPerEpoch':test_mcc_per_epoch}
 
     def countNonZeroWeights(self, model):
         """
@@ -872,6 +874,17 @@ class Experiment(object):
         # Saving the results of the different repetitions
         with open(self.results_folder + '/metrics/final_results_all_repetitions.pth', "wb") as fp:   #Pickling
             pickle.dump(repetitionsResults, fp)
+
+        # Need to save them 
+
+        #save_file_name = "./saves/results_d{dataset}_m{model}_e{exp_id}"
+        
+        ''' DEBUG logs
+        for rep_key in repetitionsResults.keys():
+            for e_key in repetitionsResults[rep_key].keys():
+
+                print(f"==== [{rep_key}] key : ", e_key )
+                print(f"==== [{rep_key}] val : ",repetitionsResults[rep_key][e_key]) '''
 
     def gridSearch(self):
         """

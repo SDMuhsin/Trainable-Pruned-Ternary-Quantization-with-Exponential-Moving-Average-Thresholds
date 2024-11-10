@@ -370,8 +370,13 @@ class Experiment(ExperimentBase):
         # Saving the results of the different repetitions
         with open(self.results_folder + '/metrics/final_results_all_repetitions.pth', "wb") as fp:   #Pickling
             pickle.dump(repetitionsResults, fp)
+        ''' 
+        for rep_key in repetitionsResults.keys():
+            for e_key in repetitionsResults[rep_key].keys():
 
-
+                print(f"==== [{rep_key}] key : ", e_key )
+                print(f"==== [{rep_key}] val : ",repetitionsResults[rep_key][e_key])
+        '''
 #==============================================================================#
 #================================ Main Function ================================#
 #==============================================================================#
