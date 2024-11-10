@@ -1,5 +1,5 @@
 auto_mix_prep==0.2.0
-h5py==3.7.0
+h5py
 imbalanced_learn==0.9.1
 imblearn==0.0
 labml_nn==0.4.124
