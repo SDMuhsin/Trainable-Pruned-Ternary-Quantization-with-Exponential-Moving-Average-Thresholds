@@ -6,7 +6,7 @@ labml_nn==0.4.124
 librosa==0.9.1
 matplotlib==3.5.3
 nnAudio==0.3.2
-numpy==1.22.0
+numpy
 pydub==0.25.1
 scikit_learn==1.2.2
 scipy==1.8.0
