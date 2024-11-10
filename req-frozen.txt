@@ -1,7 +1,6 @@
 audioread==3.0.1
 auto-mix-prep==0.2.0
 certifi==2024.8.30
-cffi==1.17.1
 charset-normalizer==3.4.0
 cycler==0.12.1
 decorator==5.1.1
