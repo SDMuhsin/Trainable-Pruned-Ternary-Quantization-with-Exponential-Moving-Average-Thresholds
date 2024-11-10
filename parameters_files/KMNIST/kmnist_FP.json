@@ -1,12 +1,12 @@
 {
-  "exp_id": "KMNIST_RESNET18_FP",
+  "exp_id": "CameraReady_KMNIST_RESNET18_FP",
 
   "lr": 1e-3,
-  "nb_repetitions": 5,
+  "nb_repetitions": 10,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 10,
+  "nb_epochs": 50,
   "loss_function": "CE",
 
   "model_type": "2DCNN",
