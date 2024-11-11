@@ -13,7 +13,7 @@
   "model_to_use": "Mnist2DCnn",
   "do_normalization_weights": false,
 
-  "device": "cpu",
+  "device": "cuda",
   "use_soft_labels": false,
   "balance_dataset": false,
   "compute_class_weights": false,
