@@ -10,7 +10,7 @@
   "loss_function": "CE",
 
   "t": 0.05,
-  "trained_fp_models_folder": "./results/MNIST_2D_CNN_FP_16.10.2024_07:18:06_0/model/",
+  "trained_fp_models_folder": "./results/MNIST_2D_CNN_FP_11.11.2024_09:13:20_0/model/",
 
   "model_type": "2DCNN",
   "model_to_use": "Mnist2DCnn",
