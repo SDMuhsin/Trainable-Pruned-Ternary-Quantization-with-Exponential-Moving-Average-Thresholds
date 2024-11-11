@@ -1,15 +1,15 @@
 {
-  "exp_id": "KMNIST_RESNET18_DoReFa",
+  "exp_id": "CameraReady_KMNIST_RESNET18_DoReFa",
 
   "lr": 1e-3,
-  "nb_repetitions": 1,
+  "nb_repetitions": 10,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 1,
+  "nb_epochs": 50,
   "loss_function": "CE",
 
-  "trained_fp_models_folder": "./results/KMNIST_RESNET18_FP_29.10.2024_17:00:57_0/model/",
+  "trained_fp_models_folder": "./results/CameraReady_KMNIST_RESNET18_FP_10.11.2024_19:41:40_0/model/",
 
   "model_type": "2DCNN",
   "model_to_use": "kmnistresnet18",
