@@ -1,21 +1,21 @@
 {
-  "exp_id": "MNIST_2D_CNN_DoReFa",
+  "exp_id": "CameraReady_MNIST_2D_CNN_DoReFa",
 
   "lr": 1e-3,
   "nb_repetitions": 10,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 100,
+  "nb_epochs": 50,
   "loss_function": "CE",
 
-  "trained_fp_models_folder": "results/MNIST_2D_CNN_FP_11.11.2024_09:13:20_0/model/",
+  "trained_fp_models_folder": "./results/CameraReady_MNIST_2D_CNN_FP_11.11.2024_11:58:36_0/model/",
 
   "model_type": "2DCNN",
   "model_to_use": "Mnist2DCnn",
   "do_normalization_weights": false,
 
-  "device": "cpu",
+  "device": "cuda",
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,
