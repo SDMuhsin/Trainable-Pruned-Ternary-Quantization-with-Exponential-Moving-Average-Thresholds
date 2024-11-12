@@ -1,5 +1,5 @@
 {
-  "exp_id": "CameraReady_KMNIST_RESNET18_DoReFa",
+  "exp_id": "CameraReady_FMNIST_RESNET18_DoReFa",
 
   "lr": 1e-3,
   "nb_repetitions": 10,
