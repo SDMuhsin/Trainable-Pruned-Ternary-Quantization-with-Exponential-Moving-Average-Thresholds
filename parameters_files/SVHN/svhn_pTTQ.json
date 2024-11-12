@@ -4,11 +4,11 @@
   "lr": 5e-6,
   "lr_wn_wp": 5e-6,
   "lr_thresh": 5e-6,
-  "nb_repetitions": 1,
+  "nb_repetitions": 10,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 1,
+  "nb_epochs": 50,
   "loss_function": "CE",
    "k":1.0,
 
@@ -20,7 +20,7 @@
   "optimize_alpha": false,
   
   
-  "trained_fp_models_folder": "./results/SVHN_RESNET18_FP_OW_0/model/",
+  "trained_fp_models_folder": "./results/CameraReady_SVHN_RESNET18_FP_OW_0/model/",
   
   "model_type": "2DCNN",
   "model_to_use": "svhnresnet18",
