@@ -1,14 +1,14 @@
 {
-  "exp_id": "CameraReady_KMNIST_RESNET18_PTTQ",
+  "exp_id": "CameraReady_SVHN_RESNET18_PTTQ",
 
   "lr": 5e-6,
   "lr_wn_wp": 5e-6,
   "lr_thresh": 5e-6,
-  "nb_repetitions": 10,
+  "nb_repetitions": 1,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 50,
+  "nb_epochs": 1,
   "loss_function": "CE",
    "k":1.0,
 
@@ -20,17 +20,17 @@
   "optimize_alpha": false,
   
   
-  "trained_fp_models_folder": "./results/CameraReady_KMNIST_RESNET18_FP_10.11.2024_19:41:40_0/model/",
+  "trained_fp_models_folder": "./results/SVHN_RESNET18_FP_OW_0/model/",
   
   "model_type": "2DCNN",
-  "model_to_use": "KMnistresnet18",
+  "model_to_use": "svhnresnet18",
   "do_normalization_weights": false,
 
   "device": "cuda",
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,
-  "dataset_type": "KMNIST",
+  "dataset_type": "SVHN",
   "percentage_samples_keep": 0.1,
-  "dataset_folder": "./data/KMNIST/"
+  "dataset_folder": "./data/SVHN/"
 }

@@ -11,17 +11,17 @@
 
   "t": 0.05,
   
-  "trained_fp_models_folder": "./results/CameraReady_KMNIST_RESNET18_FP_10.11.2024_19:41:40_0/model/",
+  "trained_fp_models_folder": "./results/CameraReady_SVHN_RESNET18_FP_OW_0/model/",
 
   "model_type": "2DCNN",
-  "model_to_use": "kmnistresnet18",
+  "model_to_use": "svhnresnet18",
   "do_normalization_weights": true,
 
   "device": "cuda",
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,
-  "dataset_type": "KMNIST",
+  "dataset_type": "SVHN",
   "percentage_samples_keep": 0.1,
-  "dataset_folder": "./data/KMNIST/"
+  "dataset_folder": "./data/SVHN/"
 }
