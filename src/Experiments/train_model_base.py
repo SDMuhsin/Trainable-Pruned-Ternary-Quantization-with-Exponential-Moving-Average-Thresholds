@@ -39,8 +39,10 @@ from src.utils.GCE import GeneralizedCrossEntropy
 from src.utils.raw_audio_tools import min_max_audio_lenght
 from src.utils.download_exp_data import download_ESR
 from src.utils.tools import change_data_samples_path, string_to_bool, train_val_split_stratified, balance_dataset
+
 from src.DataManipulation.mnist_data import put_MNIST_data_generic_form, MNISTDatasetWrapper
 from src.DataManipulation.eeg_data import EEG_EpilepticSeizureRecognition, loadFromHDF5_EEG
+from src.DataManipulation.svhn_data import put_SVHN_data_generic_form, SVHNDatasetWrapper
 
 from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init 
 from src.Models.CNNs.resnet18 import ResNet18ClassificationModel
@@ -346,7 +348,55 @@ class Experiment(object):
             if (self.separate_val_ds):
                 self.val_ds = MNISTDatasetWrapper(data=self.val_data)
             self.test_ds = MNISTDatasetWrapper(data=self.testing_data)
+        elif (self.dataset_type.lower() == 'svhn'):
+            # Transformations to apply to the dataset
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize(20),
+                torchvision.transforms.ToTensor()
+            ])
 
+            # Retrieving the training dataset
+            self.training_data = torchvision.datasets.SVHN(
+                root=parameters_exp['dataset_folder'],
+                split='train',
+                transform=transform,
+                download=True
+            )
+
+            # Keeping only a percentage of samples
+            print("Original number of training samples (SVHN): {}".format(len(self.training_data)))
+            nb_samples_keep = int(self.percentage_samples_keep * len(self.training_data))
+            self.training_data = [self.training_data[i] for i in range(len(self.training_data)) if i < nb_samples_keep]
+            print('New number of training samples (SVHN): {}'.format(len(self.training_data)))
+
+            # Putting the dataset under the right format
+            self.training_data = put_SVHN_data_generic_form(self.training_data)
+
+            # Splitting the train data into train and validation
+            if (self.separate_val_ds):
+                train_val_splits = train_val_split_stratified(self.training_data, n_splits=1, test_size=0.2)[0]
+                self.training_data, self.val_data = train_val_splits['Train'], train_val_splits['Validation']
+
+            # Retrieving the test dataset
+            self.testing_data = torchvision.datasets.SVHN(
+                root=parameters_exp['dataset_folder'],
+                split='test',
+                transform=transform,
+                download=True
+            )
+            self.testing_data = put_SVHN_data_generic_form(self.testing_data)
+
+            # Balance training dataset (TO BE DONE AFTER NOISE to be realistic)
+            # It is done ONLY ON THE TRAINING DATA
+            if (self.balance_dataset):
+                self.training_data, nb_samples_per_class = balance_dataset(self.training_data, dataset_type=self.dataset_type, balance_strategy=self.balance_strategy)
+                print("\nAFTER RESAMPLING we have {} training samples. Number of samples per class: {}".format(len(self.training_data), nb_samples_per_class))
+
+            # Creating the pytorch datasets
+            self.train_ds = SVHNDatasetWrapper(data=self.training_data)
+            if (self.separate_val_ds):
+                self.val_ds = MNISTDatasetWrapper(data=self.val_data)
+            self.test_ds = SVHNDatasetWrapper(data=self.testing_data)
         elif (self.dataset_type.lower() == 'kmnist'):
 
             # Transformations to apply to the dataset
@@ -466,6 +516,8 @@ class Experiment(object):
             pass
         elif (self.dataset_type.lower() == 'kmnist'):
             pass
+        elif (self.dataset_type.lower() == 'svhn'):
+            pass        
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
         print("Number of samples in the training dataset: ", len(self.train_ds))
@@ -515,6 +567,9 @@ class Experiment(object):
                 pass
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
+            elif (self.model_to_use.lower() in ['svhnresnet18']):
+                self.model = ResNet18ClassificationModel(input_channels=3,nb_classes=10)
+
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
                 self.nb_init_filters = self.parameters_exp['nb_init_filters']
                 self.increase_nb_filters_mode = self.parameters_exp['increase_nb_filters_mode']
@@ -1016,7 +1071,7 @@ def main():
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
-        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18']):
+        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
