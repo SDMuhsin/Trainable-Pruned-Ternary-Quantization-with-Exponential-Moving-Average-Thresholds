@@ -462,7 +462,7 @@ def main():
     # Creating directory to save the results
     inc = 0
     current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
-    resultsFolder = './results/' + parameters_exp['exp_id'] + '_' + current_datetime
+    resultsFolder = './results/' + parameters_exp['exp_id'] + '_OW' 
     while (os.path.isdir(resultsFolder+ '_' + str(inc))):
         inc += 1
     resultsFolder = resultsFolder + '_' + str(inc)

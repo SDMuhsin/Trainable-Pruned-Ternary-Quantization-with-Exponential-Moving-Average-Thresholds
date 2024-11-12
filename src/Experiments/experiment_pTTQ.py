@@ -619,7 +619,7 @@ def main():
 
     # Saving the training parameters in the folder of the results
     inc = 0
-    parameters_file = resultsFolder + '/params_exp/params' + '_'
+    parameters_file = resultsFolder + '/params_exp/params' + '_OW'
     while (os.path.isfile(parameters_file + str(inc) + '.pth')):
         inc += 1
     parameters_file = parameters_file + str(inc) +'.pth'
