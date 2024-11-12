@@ -1,14 +1,14 @@
 {
-  "exp_id": "FMNIST_2D_CNN_pTTQ",
+  "exp_id": "CameraReady_FMNIST_RESNET18_pTTQ",
 
   "lr": 5e-6,
   "lr_wn_wp": 5e-6,
   "lr_thresh": 5e-6,
-  "nb_repetitions": 1,
+  "nb_repetitions": 10,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
-  "nb_epochs": 200,
+  "nb_epochs": 50,
   "loss_function": "CE",
 
   "optimizer_pruning_params": "Adamax",
@@ -17,13 +17,13 @@
   "init_x": 1.0,
   "init_y": 1.0,
   "optimize_alpha": false,
-  "trained_fp_models_folder": "./results/FMNIST_2D_CNN_FP_17.10.2024_13:29:08_0/model/",
+  "trained_fp_models_folder": "./results/CameraReady_FMNIST_RESNET18_FP_OW_0/model/",
 
   "model_type": "2DCNN",
-  "model_to_use": "FMnist2DCnn",
+  "model_to_use": "fmnistresnet18",
   "do_normalization_weights": false,
 
-  "device": "cpu",
+  "device": "cuda",
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,

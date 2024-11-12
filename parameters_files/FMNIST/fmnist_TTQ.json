@@ -1,8 +1,8 @@
 {
-  "exp_id": "FMNIST_RESNET18_TTQ",
+  "exp_id": "CameraReady_FMNIST_RESNET18_TTQ",
 
   "lr": 1e-4,
-  "nb_repetitions": 1,
+  "nb_repetitions": 10,
   "batch_size_train": 32,
   "batch_size_test": 32,
   "weight_decay": 0,
@@ -10,7 +10,8 @@
   "loss_function": "CE",
 
   "t": 0.05,
-  "trained_fp_models_folder": "./results/FMNIST_RESNET18_FP_OW_1/model/",
+  "trained_fp_models_folder": "./results/CameraReady_FMNIST_RESNET18_FP_OW_0/model/",
+
 
   "model_type": "2DCNN",
   "model_to_use": "fmnistresnet18",
