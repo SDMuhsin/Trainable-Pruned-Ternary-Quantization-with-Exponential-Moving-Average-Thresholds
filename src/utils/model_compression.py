@@ -153,7 +153,7 @@ def get_params_groups_to_quantize(model, model_to_use):
                     'BNWeights': {'params': bn_weights},
                     'Biases': {'params': biases}
                  }
-    elif (model_to_use.lower() in ['kmnistresnet18', 'emnistresnet18','fmnistresnet18']):
+    elif (model_to_use.lower() in ['kmnistresnet18', 'emnistresnet18','fmnistresnet18','svhnresnet18']):
         # Last FC layer (for ResNet18, this is the final fc layer)
         weights_last_fc = [model.fc.weight]
         

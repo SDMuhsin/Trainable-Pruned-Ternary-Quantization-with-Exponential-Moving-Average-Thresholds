@@ -8,7 +8,7 @@ data/EMNIST/**
 data/KMNIST/**
 data/STL10/**
 
-resuts/**
+results/**
 results/*ESR*
 results/*MNIST*
 results/*FMNIST*
