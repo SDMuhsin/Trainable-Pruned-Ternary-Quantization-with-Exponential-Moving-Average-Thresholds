@@ -203,7 +203,7 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
         #input_shape = model.fc1(output_encoder.view(-1, 320)).shape # If the input size is (28, 28, 1)
         input_shape = model.fc1(output_encoder.view(-1, 80)).shape # If the input size is (20, 20, 1)
         mult_adds += count_mult_adds_layer_without_zero_ops(model.fc2, input_shape)
-    elif (model_to_use.lower() == 'kmnistresnet18'):
+    elif (model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
         # Initial convolution
         mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
         
