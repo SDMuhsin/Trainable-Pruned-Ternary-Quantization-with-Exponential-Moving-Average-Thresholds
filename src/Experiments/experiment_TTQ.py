@@ -327,7 +327,7 @@ class Experiment(ExperimentBase):
                 if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                     if ('conv' in name) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
-                elif (self.model_to_use.lower() in ['kmnistresnet18']):
+                elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                     if ('conv' in name) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
                 elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -352,7 +352,7 @@ class Experiment(ExperimentBase):
                 nb_params_layer *= val
 
             # Nb params quantize
-            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','kmnistresnet18']):
+            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','kmnistresnet18','fmnistresnet18']):
                 if ('conv' in n) and ('bias' not in n):
                     nb_params_to_quantize += nb_params_layer
             elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -517,7 +517,7 @@ def main():
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
-        elif (parameters_exp['model_to_use'].lower() == 'kmnistresnet18'):
+        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))

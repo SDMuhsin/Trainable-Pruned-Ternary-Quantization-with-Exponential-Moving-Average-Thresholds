@@ -1,7 +1,7 @@
 {
-  "exp_id": "FMNIST_RESNET18_TTQ",
+  "exp_id": "KMNIST_RESNET18_DoReFa",
 
-  "lr": 1e-4,
+  "lr": 1e-3,
   "nb_repetitions": 1,
   "batch_size_train": 32,
   "batch_size_test": 32,
@@ -9,12 +9,11 @@
   "nb_epochs": 50,
   "loss_function": "CE",
 
-  "t": 0.05,
   "trained_fp_models_folder": "./results/FMNIST_RESNET18_FP_OW_1/model/",
 
   "model_type": "2DCNN",
   "model_to_use": "fmnistresnet18",
-  "do_normalization_weights": true,
+  "do_normalization_weights": false,
 
   "device": "cuda",
   "balance_dataset": false,

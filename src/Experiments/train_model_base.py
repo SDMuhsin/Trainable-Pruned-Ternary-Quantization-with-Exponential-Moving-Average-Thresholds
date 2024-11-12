@@ -513,7 +513,7 @@ class Experiment(object):
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
-            elif (self.model_to_use.lower() == 'kmnistresnet18'):
+            elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
                 self.nb_init_filters = self.parameters_exp['nb_init_filters']
@@ -957,7 +957,7 @@ def main():
     # Creating directory to save the results
     inc = 0
     current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
-    resultsFolder = './results/' + parameters_exp['exp_id'] + '_' + current_datetime
+    resultsFolder = './results/' + parameters_exp['exp_id'] + '_' + 'OW'
     while (os.path.isdir(resultsFolder+ '_' + str(inc))):
         inc += 1
     resultsFolder = resultsFolder + '_' + str(inc)
@@ -1016,7 +1016,7 @@ def main():
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
-        elif (parameters_exp['model_to_use'].lower() == 'kmnistresnet18'):
+        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
