@@ -178,6 +178,28 @@ def get_params_groups_to_quantize(model, model_to_use):
             'BNWeights': {'params': bn_weights},
             'Biases': {'params': biases}
         }
+
+    elif (model_to_use.lower() in ['cifar10resnet50']):
+        # Last FC layer
+        weights_last_fc = [model.fc.weight]
+
+        # Parameters to quantize
+        # All convolution layers including those in Bottleneck blocks
+        weights_to_be_quantized = [p for n, p in model.named_parameters() if ('conv' in n) and ('bias' not in n)]
+        names_params_to_be_quantized = [n for n, p in model.named_parameters() if ('conv' in n) and ('bias' not in n)]
+
+        # Parameters of batch_norm layers (including those in Bottleneck blocks)
+        bn_weights = [p for n, p in model.named_parameters() if ('bn' in n or 'batch_norm' in n) and ('weight' in n)]
+
+        # All bias terms (including those in conv, bn, and fc layers)
+        biases = [p for n, p in model.named_parameters() if 'bias' in n]
+
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'BNWeights': {'params': bn_weights},
+            'Biases': {'params': biases}
+        }
     #======================================================================#
     #==========================1D CNN-Transformer==========================#
     #======================================================================#
