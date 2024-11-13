@@ -47,5 +47,5 @@ class CIFAR10DatasetWrapper(Dataset):
     def __getitem__(self, i):
         # Getting the sample
         sample_data, label = self.data[i]['Data'], self.data[i]['Label']
-        print("Sample shape:", sample_data.shape)  # Check shape here
+        #print("Sample shape:", sample_data.shape)  # Check shape here
         return sample_data, label
