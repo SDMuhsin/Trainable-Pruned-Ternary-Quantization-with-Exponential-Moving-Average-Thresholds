@@ -586,7 +586,7 @@ def main():
     # Creating directory to save the results
     inc = 0
     current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
-    resultsFolder = './results/' + parameters_exp['exp_id'] + '_' + current_datetime
+    resultsFolder = './results/' + parameters_exp['exp_id'] + '_OW'
     while (os.path.isdir(resultsFolder+ '_' + str(inc))):
         inc += 1
     resultsFolder = resultsFolder + '_' + str(inc)
@@ -652,7 +652,7 @@ def main():
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
                 shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
-            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50']):
+            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50']):
                 shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')                
             else:
                 raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))

@@ -179,7 +179,7 @@ def get_params_groups_to_quantize(model, model_to_use):
             'Biases': {'params': biases}
         }
 
-    elif (model_to_use.lower() in ['cifar10resnet50']):
+    elif (model_to_use.lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
         # Last FC layer
         weights_last_fc = [model.fc.weight]
 
