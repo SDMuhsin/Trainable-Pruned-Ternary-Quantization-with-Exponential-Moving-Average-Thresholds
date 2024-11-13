@@ -203,7 +203,7 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
         #input_shape = model.fc1(output_encoder.view(-1, 320)).shape # If the input size is (28, 28, 1)
         input_shape = model.fc1(output_encoder.view(-1, 80)).shape # If the input size is (20, 20, 1)
         mult_adds += count_mult_adds_layer_without_zero_ops(model.fc2, input_shape)
-    elif (model_to_use.lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18']):
+    elif (model_to_use.lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
         # Initial convolution
         mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
         
@@ -630,7 +630,7 @@ def main():
     model_to_use = params['model_to_use']
     dataset_type = params['dataset_type']
     bs = 1
-    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18']):
+    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','emnistresnet18']):
         input_shape = (bs, 1, 20, 20)
     elif (model_to_use.lower() in ['svhnresnet18']):
         input_shape = (bs, 3, 20,20)
