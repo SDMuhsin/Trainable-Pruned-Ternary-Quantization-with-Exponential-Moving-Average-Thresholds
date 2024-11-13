@@ -630,8 +630,10 @@ def main():
     model_to_use = params['model_to_use']
     dataset_type = params['dataset_type']
     bs = 1
-    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18']):
+    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18']):
         input_shape = (bs, 1, 20, 20)
+    elif (model_to_use.lower() in ['svhnresnet18']):
+        input_shape = (bs, 3, 20,20)
     elif (model_to_use.lower() == 'rawaudiomultichannelcnn'):
         if (dataset_type.lower() == 'hits'):
             input_shape = (bs, 2, 1400) # For HITS small
