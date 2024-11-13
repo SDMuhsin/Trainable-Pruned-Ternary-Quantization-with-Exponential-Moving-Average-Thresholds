@@ -745,8 +745,9 @@ class Experiment(object):
 
             elif (self.model_to_use.lower() in ['svhnresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=3,nb_classes=10)
-
-            elif (self.model_to_use.lower() in ['cifar10resnet50','cifar100resnet50']):
+            elif (self.model_to_use.lower() in ['cifar10resnet50']):
+                self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=10)
+            elif (self.model_to_use.lower() in ['cifar100resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
 
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
