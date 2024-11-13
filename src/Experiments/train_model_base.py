@@ -43,7 +43,7 @@ from src.utils.tools import change_data_samples_path, string_to_bool, train_val_
 from src.DataManipulation.mnist_data import put_MNIST_data_generic_form, MNISTDatasetWrapper
 from src.DataManipulation.eeg_data import EEG_EpilepticSeizureRecognition, loadFromHDF5_EEG
 from src.DataManipulation.svhn_data import put_SVHN_data_generic_form, SVHNDatasetWrapper
-from src.DataManipulation.emnist_data import put_EMNIST_data_generic_form. EMNISTDatasetWrapper
+from src.DataManipulation.emnist_data import put_EMNIST_data_generic_form, EMNISTDatasetWrapper
 
 from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init 
 from src.Models.CNNs.resnet18 import ResNet18ClassificationModel
@@ -398,7 +398,7 @@ class Experiment(object):
             if (self.separate_val_ds):
                 self.val_ds = MNISTDatasetWrapper(data=self.val_data)
             self.test_ds = SVHNDatasetWrapper(data=self.testing_data)
-            
+                    
         elif (self.dataset_type.lower() == 'emnist'):
             # Transformations to apply to the dataset
             transform = torchvision.transforms.Compose([
@@ -421,8 +421,15 @@ class Experiment(object):
             self.training_data = [self.training_data[i] for i in range(len(self.training_data)) if i < nb_samples_keep]
             print('New number of training samples (EMNIST): {}'.format(len(self.training_data)))
 
+            # Check and adjust labels if necessary
+            # EMNIST letters should have labels from 0 to 25
+            labels = [label for _, label in self.training_data]
+            if max(labels) >= 26:  # Adjust if labels are not in the expected range
+                print("Adjusting labels from 1-26 to 0-25.")
+                labels = [label - 1 for label in labels]  # Adjust labels to be zero-indexed
+
             # Putting the dataset under the right format
-            self.training_data = put_EMNIST_data_generic_form(self.training_data)
+            self.training_data = put_EMNIST_data_generic_form(list(zip([img for img, _ in self.training_data], labels)))
 
             # Splitting the train data into train and validation
             if (self.separate_val_ds):
@@ -437,10 +444,16 @@ class Experiment(object):
                 transform=transform,
                 download=True
             )
-            self.testing_data = put_EMNIST_data_generic_form(self.testing_data)
+
+            # Check and adjust test labels if necessary
+            test_labels = [label for _, label in self.testing_data]
+            if max(test_labels) >= 26:  # Adjust if labels are not in the expected range
+                print("Adjusting test labels from 1-26 to 0-25.")
+                test_labels = [label - 1 for label in test_labels]  # Adjust labels to be zero-indexed
+
+            self.testing_data = put_EMNIST_data_generic_form(list(zip([img for img, _ in self.testing_data], test_labels)))
 
             # Balance training dataset (TO BE DONE AFTER NOISE to be realistic)
-            # It is done ONLY ON THE TRAINING DATA
             if (self.balance_dataset):
                 self.training_data, nb_samples_per_class = balance_dataset(self.training_data, dataset_type=self.dataset_type, balance_strategy=self.balance_strategy)
                 print("\nAFTER RESAMPLING we have {} training samples. Number of samples per class: {}".format(len(self.training_data), nb_samples_per_class))
@@ -569,7 +582,7 @@ class Experiment(object):
             pass
         elif (self.dataset_type.lower() == 'kmnist'):
             pass
-        elif (self.dataset_type.lower() == 'svhn'):
+        elif (self.dataset_type.lower() in ['svhn','emnist']):
             pass        
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
@@ -620,6 +633,10 @@ class Experiment(object):
                 pass
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
+
+            elif (self.model_to_use.lower() in ['emnistresnet18']):
+                self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=26)
+
             elif (self.model_to_use.lower() in ['svhnresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=3,nb_classes=10)
 
@@ -726,6 +743,7 @@ class Experiment(object):
         # Computing the loss
         out = self.model(audio_features) # Generate predictions
         loss = self.criterion(out, labels.long()) # Calculate loss
+        #print("Sample labels:", [label for _, label in self.training_data[:10]])  # Print first 10 labels
 
         # Getting the HARD predictions
         y_true, y_pred = [], []
@@ -1124,7 +1142,7 @@ def main():
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
-        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18']):
+        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
