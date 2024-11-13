@@ -1,5 +1,5 @@
 {
-  "exp_id": "CameraReady_EMNIST_RESNET18_PTTQ",
+  "exp_id": "CameraReady_CIFAR10_RESNET50_PTTQ",
 
   "lr": 5e-6,
   "lr_wn_wp": 5e-6,
@@ -20,17 +20,17 @@
   "optimize_alpha": false,
   
   
-  "trained_fp_models_folder": "./results/CameraReady_EMNIST_RESNET18_FP_OW_0/model/",
+  "trained_fp_models_folder": "./results/CameraReady_CIFAR10_RESNET50_FP_OW_0/model/",
   
   "model_type": "2DCNN",
-  "model_to_use": "emnistresnet18",
+  "model_to_use": "cifar10resnet50",
   "do_normalization_weights": false,
 
   "device": "cuda",
   "balance_dataset": false,
   "compute_class_weights": false,
   "separate_val_ds": false,
-  "dataset_type": "EMNIST",
+  "dataset_type": "CIFAR10",
   "percentage_samples_keep": 0.1,
-  "dataset_folder": "./data/EMNIST/"
+  "dataset_folder": "./data/CIFAR10/"
 }

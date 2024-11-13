@@ -185,7 +185,121 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
 
     # Computing the number of mult-adds of the model based on the input
     mult_adds = 0
-    if (model_to_use.lower() == 'mnist2dcnn'):
+
+    if model_to_use.lower() == 'cifar10resnet50':
+        # Initial convolution
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
+
+        # Track shape through initial layers
+        x = model.encoder.conv1(random_input_tensor)
+        x = model.encoder.bn1(x)
+        x = F.relu(x)
+
+        # Layer 1 (3 bottleneck blocks)
+        for block in model.encoder.layer1:
+            shortcut_shape = x.shape
+            
+            # First conv block
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, x.shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+
+            # Second conv block
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, x.shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+
+            # Third conv block (for bottleneck)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv3, x.shape)
+            x = block.conv3(x)
+            x = block.bn3(x)
+
+            # Shortcut connection
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+
+            x += shortcut_shape  # Add shortcut
+            x = F.relu(x)  # Activation after addition
+
+        # Layer 2 (4 bottleneck blocks)
+        for block in model.encoder.layer2:
+            shortcut_shape = x.shape
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, x.shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, x.shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv3, x.shape)
+            x = block.conv3(x)
+            x = block.bn3(x)
+
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+
+            x += shortcut_shape
+            x = F.relu(x)
+
+        # Layer 3 (6 bottleneck blocks)
+        for block in model.encoder.layer3:
+            shortcut_shape = x.shape
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, x.shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, x.shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv3, x.shape)
+            x = block.conv3(x)
+            x = block.bn3(x)
+
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+
+            x += shortcut_shape
+            x = F.relu(x)
+
+        # Layer 4 (3 bottleneck blocks)
+        for block in model.encoder.layer4:
+            shortcut_shape = x.shape
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, x.shape)
+            x = block.conv1(x)
+            x = block.bn1(x)
+            x = F.relu(x)
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv2, x.shape)
+            x = block.conv2(x)
+            x = block.bn2(x)
+
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.conv3, x.shape)
+            x = block.conv3(x)
+            x = block.bn3(x)
+
+            if len(block.shortcut) > 0:
+                mult_adds += count_mult_adds_layer_without_zero_ops(block.shortcut[0], shortcut_shape)
+
+            x += shortcut_shape
+            x = F.relu(x)
+
+        # Final classifier
+        # Global average pooling
+        x = model.avgpool(x)  
+        # Flattening
+        input_shape_flattened = torch.flatten(x, 1).shape  
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.fc, input_shape_flattened) 
+
+
+    elif (model_to_use.lower() == 'mnist2dcnn'):
         # Encoder layers
         # Conv1
         mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
@@ -634,6 +748,8 @@ def main():
         input_shape = (bs, 1, 20, 20)
     elif (model_to_use.lower() in ['svhnresnet18']):
         input_shape = (bs, 3, 20,20)
+    elif (model_to_use.lower() in ['cifar10resnet50']):
+        input_shape = (bs,3,32,32)
     elif (model_to_use.lower() == 'rawaudiomultichannelcnn'):
         if (dataset_type.lower() == 'hits'):
             input_shape = (bs, 2, 1400) # For HITS small
