@@ -16,7 +16,7 @@
     "init_x": 1.0,
     "init_y": 1.0,
     "optimize_alpha": false,
-    "trained_fp_models_folder": "./results/CameraReady_MNIST_2D_CNN_FP_11.11.2024_11:58:36_0/model/",
+    "trained_fp_models_folder": "./results/CameraReady_MNIST_2D_CNN_FP_OW_0/model/",
     "model_type": "2DCNN",
     "model_to_use": "Mnist2DCnn",
     "do_normalization_weights": false,
