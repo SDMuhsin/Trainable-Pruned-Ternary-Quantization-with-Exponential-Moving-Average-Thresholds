@@ -1,24 +1,21 @@
 {
-  "exp_id": "CameraReady_FMNIST_RESNET18_FP",
-
-  "lr": 1e-3,
-  "nb_repetitions": 10,
-  "batch_size_train": 32,
-  "batch_size_test": 32,
-  "weight_decay": 0,
-  "nb_epochs": 50,
-  "loss_function": "CE",
-
-  "model_type": "2DCNN",
-  "model_to_use": "fmnistresnet18",
-  "do_normalization_weights": false,
-
-  "device": "cuda",
-  "use_soft_labels": false,
-  "balance_dataset": false,
-  "compute_class_weights": false,
-  "separate_val_ds": false,
-  "dataset_type": "FMNIST",
-  "percentage_samples_keep": 0.1,
-  "dataset_folder": "./data/FMNIST/"
+    "exp_id": "CameraReady_FMNIST_RESNET18_FP",
+    "lr": 0.001,
+    "nb_repetitions": 10,
+    "batch_size_train": 32,
+    "batch_size_test": 32,
+    "weight_decay": 0,
+    "nb_epochs": 50,
+    "loss_function": "CE",
+    "model_type": "2DCNN",
+    "model_to_use": "fmnistresnet18",
+    "do_normalization_weights": false,
+    "device": "cuda",
+    "use_soft_labels": false,
+    "balance_dataset": false,
+    "compute_class_weights": false,
+    "separate_val_ds": false,
+    "dataset_type": "FMNIST",
+    "percentage_samples_keep": 1,
+    "dataset_folder": "./data/FMNIST/"
 }

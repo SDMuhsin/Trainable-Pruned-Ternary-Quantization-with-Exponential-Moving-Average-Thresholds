@@ -1,25 +1,21 @@
 {
-  "exp_id": "CameraReady_STL10_RESNET50_DoReFa",
-
-  "lr": 1e-3,
-  "nb_repetitions": 10,
-  "batch_size_train": 32,
-  "batch_size_test": 32,
-  "weight_decay": 0,
-  "nb_epochs": 50,
-  "loss_function": "CE",
-
-  "trained_fp_models_folder": "./results/CameraReady_STL10_RESNET50_FP_OW_0/model/",
-
-  "model_type": "2DCNN",
-  "model_to_use": "stl10resnet50",
-  "do_normalization_weights": false,
-
-  "device": "cuda",
-  "balance_dataset": false,
-  "compute_class_weights": false,
-  "separate_val_ds": false,
-  "dataset_type": "STL10",
-  "percentage_samples_keep": 0.1,
-  "dataset_folder": "./data/STL10/"
+    "exp_id": "CameraReady_STL10_RESNET50_DoReFa",
+    "lr": 0.001,
+    "nb_repetitions": 10,
+    "batch_size_train": 32,
+    "batch_size_test": 32,
+    "weight_decay": 0,
+    "nb_epochs": 50,
+    "loss_function": "CE",
+    "trained_fp_models_folder": "./results/CameraReady_STL10_RESNET50_FP_OW_0/model/",
+    "model_type": "2DCNN",
+    "model_to_use": "stl10resnet50",
+    "do_normalization_weights": false,
+    "device": "cuda",
+    "balance_dataset": false,
+    "compute_class_weights": false,
+    "separate_val_ds": false,
+    "dataset_type": "STL10",
+    "percentage_samples_keep": 1,
+    "dataset_folder": "./data/STL10/"
 }
