@@ -186,7 +186,10 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
     # Computing the number of mult-adds of the model based on the input
     mult_adds = 0
 
-    if model_to_use.lower() == 'cifar10resnet50':
+    if model_to_use.lower() in ['cifar10resnet50', 'cifar100resnet50','stl10resnet50']:
+        # Determine the number of classes based on the model
+        num_classes = 10 if model_to_use.lower() == 'cifar10resnet50' else 100
+
         # Initial convolution
         mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
 
@@ -198,7 +201,7 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
         # Layer 1 (3 bottleneck blocks)
         for block in model.encoder.layer1:
             shortcut_shape = x.shape
-            
+
             # First conv block
             mult_adds += count_mult_adds_layer_without_zero_ops(block.conv1, x.shape)
             x = block.conv1(x)
@@ -293,10 +296,13 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
 
         # Final classifier
         # Global average pooling
-        x = model.avgpool(x)  
+        x = model.avgpool(x)
         # Flattening
-        input_shape_flattened = torch.flatten(x, 1).shape  
-        mult_adds += count_mult_adds_layer_without_zero_ops(model.fc, input_shape_flattened) 
+        input_shape_flattened = torch.flatten(x, 1).shape
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.fc, input_shape_flattened)
+
+        # Check to ensure the output dimension matches the expected number of classes
+        assert model.fc.out_features == num_classes, f"Expected {num_classes} output classes, but got {model.fc.out_features}"
 
 
     elif (model_to_use.lower() == 'mnist2dcnn'):
@@ -749,6 +755,8 @@ def main():
     elif (model_to_use.lower() in ['svhnresnet18']):
         input_shape = (bs, 3, 20,20)
     elif (model_to_use.lower() in ['cifar10resnet50']):
+        input_shape = (bs,3,32,32)
+    elif (model_to_use.lower() in ['cifar100resnet50']):
         input_shape = (bs,3,32,32)
     elif (model_to_use.lower() == 'rawaudiomultichannelcnn'):
         if (dataset_type.lower() == 'hits'):

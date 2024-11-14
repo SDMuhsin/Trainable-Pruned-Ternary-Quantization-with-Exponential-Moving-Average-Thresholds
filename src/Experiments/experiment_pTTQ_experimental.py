@@ -652,7 +652,7 @@ def main():
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
                 shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
-            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50']):
+            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
                 shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')                
             else:
                 raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))

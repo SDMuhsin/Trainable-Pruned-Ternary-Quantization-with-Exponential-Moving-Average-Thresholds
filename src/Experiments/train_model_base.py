@@ -46,11 +46,14 @@ from src.DataManipulation.svhn_data import put_SVHN_data_generic_form, SVHNDatas
 from src.DataManipulation.emnist_data import put_EMNIST_data_generic_form, EMNISTDatasetWrapper
 from src.DataManipulation.cifar10_data import put_CIFAR10_data_generic_form, CIFAR10DatasetWrapper
 from src.DataManipulation.cifar100_data import put_CIFAR100_data_generic_form, CIFAR100DatasetWrapper
-
+from src.DataManipulation.stl10_data import put_STL10_data_generic_form, STL10DatasetWrapper
 
 from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init 
 from src.Models.CNNs.resnet18 import ResNet18ClassificationModel
 from src.Models.CNNs.resnet50 import ResNet50ClassificationModel
+from src.Models.CNNs.resnet34 import ResNet34ClassificationModel
+
+
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
 
@@ -304,6 +307,58 @@ class Experiment(object):
             if (self.separate_val_ds):
                 self.val_ds = MNISTDatasetWrapper(data=self.val_data)
             self.test_ds = MNISTDatasetWrapper(data=self.testing_data)
+
+        elif (self.dataset_type.lower() == 'stl10'):
+            
+            # Transformations to apply to the dataset
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize((32, 32)),  # Resize to 32x32 for consistency
+                torchvision.transforms.ToTensor()
+            ])
+
+            # Retrieving the training dataset
+            self.training_data = torchvision.datasets.STL10(
+                root=parameters_exp['dataset_folder'],
+                split='train',
+                transform=transform,
+                download=True
+            )
+
+            # Keeping only a percentage of samples
+            print("Original number of training samples (STL10): {}".format(len(self.training_data)))
+            nb_samples_keep = int(self.percentage_samples_keep * len(self.training_data))
+            self.training_data = [self.training_data[i] for i in range(len(self.training_data)) if i < nb_samples_keep]
+            print('New number of training samples (STL10): {}'.format(len(self.training_data)))
+
+            # Putting the dataset under the right format
+            self.training_data = put_STL10_data_generic_form(self.training_data)
+
+            # Splitting the train data into train and validation
+            if (self.separate_val_ds):
+                train_val_splits = train_val_split_stratified(self.training_data, n_splits=1, test_size=0.2)[0]
+                self.training_data, self.val_data = train_val_splits['Train'], train_val_splits['Validation']
+
+            # Retrieving the test dataset
+            self.testing_data = torchvision.datasets.STL10(
+                root=parameters_exp['dataset_folder'],
+                split='test',
+                transform=transform,
+                download=True
+            )
+            self.testing_data = put_STL10_data_generic_form(self.testing_data)
+
+            # Balance training dataset (TO BE DONE AFTER NOISE to be realistic)
+            # It is done ONLY ON THE TRAINING DATA
+            if (self.balance_dataset):
+                self.training_data, nb_samples_per_class = balance_dataset(self.training_data, dataset_type=self.dataset_type, balance_strategy=self.balance_strategy)
+                print("\nAFTER RESAMPLING we have {} training samples. Number of samples per class: {}".format(len(self.training_data), nb_samples_per_class))
+
+            # Creating the pytorch datasets
+            self.train_ds = STL10DatasetWrapper(data=self.training_data)
+            if (self.separate_val_ds):
+                self.val_ds = STL10DatasetWrapper(data=self.val_data)
+            self.test_ds = STL10DatasetWrapper(data=self.testing_data)
+
         elif (self.dataset_type.lower() == 'fmnist'):
             # Transformations to apply to the dataset
             transform = torchvision.transforms.Compose(
@@ -522,7 +577,9 @@ class Experiment(object):
             # Transformations to apply to the dataset
             transform = torchvision.transforms.Compose([
                 torchvision.transforms.Resize((32, 32)),  # Resize to 32x32 for consistency
-                torchvision.transforms.ToTensor()
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+
             ])
 
             # Retrieving the training dataset
@@ -688,7 +745,7 @@ class Experiment(object):
             pass
         elif (self.dataset_type.lower() == 'kmnist'):
             pass
-        elif (self.dataset_type.lower() in ['svhn','emnist','cifar10','cifar100']):
+        elif (self.dataset_type.lower() in ['svhn','emnist','cifar10','cifar100','stl10']):
             pass        
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
@@ -745,11 +802,13 @@ class Experiment(object):
 
             elif (self.model_to_use.lower() in ['svhnresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=3,nb_classes=10)
-            elif (self.model_to_use.lower() in ['cifar10resnet50']):
+            elif (self.model_to_use.lower() in ['cifar10resnet50','stl10resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=10)
             elif (self.model_to_use.lower() in ['cifar100resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
-
+            elif (self.model_to_use.lower() in ['cifar100resnet34']):
+                self.model = ResNet34ClassificationModel(input_channels=3,nb_classes=100)
+             
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
                 self.nb_init_filters = self.parameters_exp['nb_init_filters']
                 self.increase_nb_filters_mode = self.parameters_exp['increase_nb_filters_mode']
@@ -1254,8 +1313,10 @@ def main():
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
         elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
-        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50']):
+        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() in ['cifar100resnet34']):
+            shutil.copy2('./src/Models/CNNs/resnet34.py', resultsFolder + '/params_exp/network_architecture.py')            
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
 
