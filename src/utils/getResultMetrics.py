@@ -47,17 +47,17 @@ def main():
         print(f"Sparsity at best metric: {best_sparsity:.6f}")
         print()
 
-    avg_best_metric = np.mean(all_best_metrics)
-    std_best_metric = np.std(all_best_metrics)
+    avg_best_metric = np.mean(all_best_metrics) * 100
+    std_best_metric = np.std(all_best_metrics)  * 100
     avg_convergence_epoch = np.mean(all_best_epochs)
-    avg_best_sparsity = np.mean(all_best_sparsities)
-    std_best_sparsity = np.std(all_best_sparsities)
+    avg_best_sparsity = np.mean(all_best_sparsities) * 100
+    std_best_sparsity = np.std(all_best_sparsities) * 100
 
     print("Summary across all repetitions:")
     print("================================")
     print(f"Average best metric: {avg_best_metric:.4f} ± {std_best_metric:.4f}")
     print(f"Average time to convergence: {avg_convergence_epoch:.2f} epochs")
-    print(f"Average sparsity at best metric: {avg_best_sparsity:.6f} ± {std_best_sparsity:.6f}")
+    print(f"Average sparsity at best metric: {avg_best_sparsity:.2f} ± {std_best_sparsity:.2f}")
 
 if __name__ == "__main__":
     main()
