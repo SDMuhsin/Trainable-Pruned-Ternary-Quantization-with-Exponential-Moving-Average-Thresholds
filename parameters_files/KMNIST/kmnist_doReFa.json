@@ -7,7 +7,7 @@
     "weight_decay": 0,
     "nb_epochs": 50,
     "loss_function": "CE",
-    "trained_fp_models_folder": "./results/CameraReady_KMNIST_RESNET18_FP_10.11.2024_19:41:40_0/model/",
+    "trained_fp_models_folder": "./results/CameraReady_KMNIST_RESNET18_FP_OW_0/model/",
     "model_type": "2DCNN",
     "model_to_use": "kmnistresnet18",
     "do_normalization_weights": false,
