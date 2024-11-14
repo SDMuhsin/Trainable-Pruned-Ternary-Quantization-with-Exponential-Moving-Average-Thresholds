@@ -55,7 +55,7 @@ def main():
 
     print("Summary across all repetitions:")
     print("================================")
-    print(f"Average best metric: {avg_best_metric:.4f} ± {std_best_metric:.4f}")
+    print(f"Average best metric: {avg_best_metric:.2f} ± {std_best_metric:.2f}")
     print(f"Average time to convergence: {avg_convergence_epoch:.2f} epochs")
     print(f"Average sparsity at best metric: {avg_best_sparsity:.2f} ± {std_best_sparsity:.2f}")
 
