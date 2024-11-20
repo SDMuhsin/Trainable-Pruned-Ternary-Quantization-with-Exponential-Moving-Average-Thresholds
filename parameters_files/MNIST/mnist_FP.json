@@ -5,7 +5,7 @@
     "batch_size_train": 32,
     "batch_size_test": 32,
     "weight_decay": 0,
-    "nb_epochs": 3,
+    "nb_epochs": 50,
     "loss_function": "CE",
     "model_type": "2DCNN",
     "model_to_use": "Mnist2DCnn",

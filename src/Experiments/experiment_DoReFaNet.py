@@ -357,8 +357,8 @@ class Experiment(ExperimentBase):
             # Saving the final model and the results
             # Model
             torch.save({
-                            'model_state_dict': self.model.state_dict(),
-                            'model': self.model
+                            'model_state_dict': self.best_model.state_dict(),
+                            'model': self.best_model
                         }, self.results_folder + '/model/final_model-{}_rep-{}.pth'.format(self.exp_id, nb_repetition))
             # # Model exported with torch.jit
             # model_jit = torch.jit.script(self.model) # Export to TorchScript
