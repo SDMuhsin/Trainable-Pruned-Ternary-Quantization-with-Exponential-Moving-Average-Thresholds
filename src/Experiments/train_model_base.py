@@ -14,6 +14,7 @@ import shutil
 import pickle
 import argparse
 from tqdm import tqdm
+import copy
 
 import random
 
@@ -73,6 +74,9 @@ class Experiment(object):
                     * exp_id: str, name of the experiment.
                     * feature_type
         """
+
+        self.best_model = None
+
         # Defining some attributes of the experiment
         self.exp_id = parameters_exp['exp_id']
         self.results_folder = None
@@ -846,7 +850,8 @@ class Experiment(object):
         else:
             raise ValueError("Model type {} is not valid".format(self.model_type))
 
-
+        
+        self.best_model = copy.deepcopy(self.model).cpu()
         # Sending the model to the correct device
         self.model.to(self.device)
 
@@ -1014,6 +1019,8 @@ class Experiment(object):
         # Epochs
         sparsity_rates_per_epoch = []
         test_mcc_per_epoch = []
+        best_mcc_so_far = -1
+
         for epoch in tqdm(range(self.nb_epochs)):
             # Hyperparams optimization usin Simulated Annealing
             if (self.do_hyperparams_opt) and (epoch == 0):
@@ -1095,8 +1102,16 @@ class Experiment(object):
                     print("\t\tVal MCC at epoch {} is {}".format(epoch, matthews_corrcoef(predictions_results['Val']['TrueLabels'][epoch], predictions_results['Val']['PredictedLabels'][epoch])))
                 print("\t\tTest MCC at epoch {} is {}".format(epoch, matthews_corrcoef(predictions_results['Test']['TrueLabels'][epoch], predictions_results['Test']['PredictedLabels'][epoch])))
                 print("================================================================================\n\n")
+
                 test_mcc_per_epoch.append(  matthews_corrcoef(predictions_results['Test']['TrueLabels'][epoch], predictions_results['Test']['PredictedLabels'][epoch]) )
-            # Saving the model and the current results
+
+                if( test_mcc_per_epoch[-1] > best_mcc_so_far ):
+                    
+                    best_mcc_so_far = test_mcc_per_epoch[-1]
+                    print(f"New best MCC",best_mcc_so_far)
+                    self.best_model = copy.deepcopy(self.model).cpu()
+
+
             current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
 
             # Sparsity rate at the given epoch
@@ -1148,18 +1163,20 @@ class Experiment(object):
         """
             Does a holdout training repeated self.nb_repetitions times
         """
+
+        best_model = None
         repetitionsResults = {}
         for nb_repetition in range(self.nb_repetitions):
             print("\n\n=======> Repetitions {} <=======".format(nb_repetition))
             # Doing single train
             tmp_results = self.single_train()
             repetitionsResults[nb_repetition] = tmp_results
-
+            
             # Saving the final model and the results
             # Model
             torch.save({
-                            'model_state_dict': self.model.state_dict(),
-                            'model': self.model
+                            'model_state_dict': self.best_model.state_dict(),
+                            'model': self.best_model
                         }, self.results_folder + '/model/final_model-{}_rep-{}.pth'.format(self.exp_id, nb_repetition))
             # Results
             with open(self.results_folder + '/metrics/results_exp-{}_rep-{}.pth'.format(self.exp_id, nb_repetition), "wb") as fp:   #Pickling
