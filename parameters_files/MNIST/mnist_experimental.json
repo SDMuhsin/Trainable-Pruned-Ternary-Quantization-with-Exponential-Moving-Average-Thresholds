@@ -9,7 +9,7 @@
     "weight_decay": 0,
     "nb_epochs": 50,
     "loss_function": "CE",
-    "k": 0.5,
+    "k": 1,
     "optimizer_pruning_params": "Adamax",
     "pruning_function_type": "experimental",
     "alpha": 10000.0,

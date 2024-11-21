@@ -1250,12 +1250,16 @@ def main():
     # Add the arguments to the parser
     default_parameters_file = "../../parameters_files/MNIST/mnist_FP.json"
     ap.add_argument('--parameters_file', default=default_parameters_file, help="Parameters for the experiment", type=str)
+    ap.add_argument('--k_override',default=None,help="Override value of k from parameters file for experimental pTTQ", type=float)
     args = vars(ap.parse_args())
 
+    
     # Getting the value of the arguments
     parameters_file = args['parameters_file']
     with open(parameters_file) as jf:
         parameters_exp = json.load(jf)
+
+    parameters_exp['k_override'] = args['k_override']
 
     # Grid search parameter in the parameters file
     if ('doGridSearch' not in parameters_exp):
