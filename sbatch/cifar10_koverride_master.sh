@@ -11,8 +11,8 @@ do
         --ntasks-per-node=1 \
         --cpus-per-task=1 \
         --gpus=1 \
-        --mem=6000M \
-        --time=2-00:00 \
+        --mem=8000M \
+        --time=7-00:00 \
         --chdir=/scratch/sdmuhsin/Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds \
         --output=cifar10-k${k}-%N-%j.out \
         --wrap="
