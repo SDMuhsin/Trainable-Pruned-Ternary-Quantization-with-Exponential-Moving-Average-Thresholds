@@ -1,5 +1,5 @@
 {
-    "exp_id": "CIFAR10_2D_CNN_pTTQ_No_Weights_Statistics",
+    "exp_id": "EXP3_CIFAR10",
     "lr": 0.001,
     "lr_wn_wp": 0.0001,
     "lr_thresh": 0.0001,
