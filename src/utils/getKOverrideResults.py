@@ -16,13 +16,12 @@ def process_file(file_path):
     best_epoch = test_mcc.index(best_metric)
     best_sparsity = sparsity_rate[best_epoch]
 
-    return best_metric, best_epoch + 1, best_sparsity  # +1 for 1-indexed epochs
+    return best_metric, best_epoch + 1, best_sparsity
 
 def process_k_value(file_pattern):
     matching_files = glob.glob(file_pattern)
 
     if not matching_files:
-        print(f"No files found matching the pattern: {file_pattern}")
         return None
 
     all_best_metrics = []
@@ -42,35 +41,34 @@ def process_k_value(file_pattern):
     std_best_sparsity = np.std(all_best_sparsities) * 100
 
     return {
-        "avg_best_metric": f"{avg_best_metric:.2f} ± {std_best_metric:.2f}",
-        "avg_convergence_epoch": f"{avg_convergence_epoch:.2f}",
-        "avg_best_sparsity": f"{avg_best_sparsity:.2f} ± {std_best_sparsity:.2f}"
+        "average_best_metric": f"{avg_best_metric:.2f} ± {std_best_metric:.2f}",
+        "average_time_to_convergence": f"{avg_convergence_epoch:.2f}",
+        "average_sparsity_at_best_metric": f"{avg_best_sparsity:.2f} ± {std_best_sparsity:.2f}"
     }
 
+def consolidate_results():
+    base_pattern = "./results/CameraReady_SVHN_RESNET18_experimental_k{}_OW_0/metrics/results_exp-CameraReady_SVHN_RESNET18_experimental_k{}_rep-*.pth"
+    consolidated_results = {}
+
+    for k in np.arange(0.1, 2.1, 0.1):
+        k_rounded = round(k, 1)
+        file_pattern = base_pattern.format(k_rounded, k_rounded)
+        results = process_k_value(file_pattern)
+        if results:
+            consolidated_results[str(k_rounded)] = results
+        else:
+            print(f"No files found for k={k_rounded}.")
+
+    return consolidated_results
+
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--parameters_pth_file', required=True, help="Parameters for the experiment. Use # for k value placeholder.", type=str)
-    args = vars(ap.parse_args())
-
-    base_pattern = args['parameters_pth_file']
-    k_values = [round(k, 1) for k in np.arange(0.1, 2.1, 0.1)]
+    os.makedirs('./results', exist_ok=True)
+    consolidated_results = consolidate_results()
+    results_json_path = './results/koverride_results_CameraReady_SVHN_RESNET18.json'
+    with open(results_json_path, 'w') as json_file:
+        json.dump(consolidated_results, json_file, indent=4)
     
-    results = {}
-
-    for k in k_values:
-        file_pattern = base_pattern.replace('#', str(k))
-        k_results = process_k_value(file_pattern)
-        if k_results:
-            results[str(k)] = k_results
-
-    # Extract experiment name from the file pattern
-    exp_name = os.path.basename(base_pattern).split('_exp-')[1].split('_k#')[0]
-    output_file = f"./results/koverride_results_{exp_name}.json"
-
-    with open(output_file, 'w') as f:
-        json.dump(results, f, indent=2)
-
-    print(f"Results saved to {output_file}")
+    print(f'Results saved to {results_json_path}')
 
 if __name__ == "__main__":
     main()
