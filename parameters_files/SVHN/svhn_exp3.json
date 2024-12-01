@@ -14,7 +14,7 @@
     "init_x": 1.0,
     "init_y": 1.0,
     "optimize_alpha": false,
-    "trained_fp_models_folder": "./results/CameraReady_SVHN_2D_CNN_FP_OW_0/model/",
+    "trained_fp_models_folder": "./results/CameraReady_SVHN_RESNET18_FP_OW_0/model/",
     "model_type": "2DCNN",
     "model_to_use": "svhnresnet18",
     "do_normalization_weights": false,
