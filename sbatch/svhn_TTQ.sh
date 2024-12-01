@@ -1,4 +1,3 @@
-M
 #!/bin/bash
 
 #SBATCH --nodes=1
