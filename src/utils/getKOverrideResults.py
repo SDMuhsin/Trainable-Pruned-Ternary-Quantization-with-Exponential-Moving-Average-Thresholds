@@ -4,6 +4,7 @@ import glob
 import numpy as np
 import json
 import os
+import re
 
 def process_file(file_path):
     with open(file_path, 'rb') as pf:
@@ -41,14 +42,17 @@ def process_k_value(file_pattern):
     std_best_sparsity = np.std(all_best_sparsities) * 100
 
     return {
-        "average_best_metric": f"{avg_best_metric:.2f} ± {std_best_metric:.2f}",
-        "average_time_to_convergence": f"{avg_convergence_epoch:.2f}",
-        "average_sparsity_at_best_metric": f"{avg_best_sparsity:.2f} ± {std_best_sparsity:.2f}"
+        "average_best_metric": {"avg": avg_best_metric, "std": std_best_metric},
+        "average_time_to_convergence": {"avg": avg_convergence_epoch},
+        "average_sparsity_at_best_metric": {"avg": avg_best_sparsity, "std": std_best_sparsity}
     }
 
-def consolidate_results():
-    base_pattern = "./results/CameraReady_SVHN_RESNET18_experimental_k{}_OW_0/metrics/results_exp-CameraReady_SVHN_RESNET18_experimental_k{}_rep-*.pth"
+def consolidate_results(base_pattern):
     consolidated_results = {}
+    
+    # Extract prefix for naming the JSON file
+    match = re.search(r'CameraReady_(.+?)_experimental_k', base_pattern)
+    prefix = match.group(1) if match else "results"
 
     for k in np.arange(0.1, 2.1, 0.1):
         k_rounded = round(k, 1)
@@ -59,12 +63,20 @@ def consolidate_results():
         else:
             print(f"No files found for k={k_rounded}.")
 
-    return consolidated_results
+    return consolidated_results, prefix
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base_pattern', required=True, help="Base pattern for file search.")
+    
+    args = parser.parse_args()
+    
     os.makedirs('./results', exist_ok=True)
-    consolidated_results = consolidate_results()
-    results_json_path = './results/koverride_results_CameraReady_SVHN_RESNET18.json'
+    
+    consolidated_results, prefix = consolidate_results(args.base_pattern)
+    
+    results_json_path = f'./results/koverride_results_{prefix}.json'
+    
     with open(results_json_path, 'w') as json_file:
         json.dump(consolidated_results, json_file, indent=4)
     

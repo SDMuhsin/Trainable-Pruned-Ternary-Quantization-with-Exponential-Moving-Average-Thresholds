@@ -1,5 +1,5 @@
 {
-    "exp_id": "MNIST_2D_CNN_pTTQ_No_Weights_Statistics",
+    "exp_id": "SVHN_2D_CNN_EXP3",
     "lr": 0.001,
     "lr_wn_wp": 0.0001,
     "lr_thresh": 0.0001,
@@ -14,15 +14,15 @@
     "init_x": 1.0,
     "init_y": 1.0,
     "optimize_alpha": false,
-    "trained_fp_models_folder": "./results/CameraReady_MNIST_2D_CNN_FP_OW_0/model/",
+    "trained_fp_models_folder": "./results/CameraReady_SVHN_2D_CNN_FP_OW_0/model/",
     "model_type": "2DCNN",
-    "model_to_use": "Mnist2DCnn",
+    "model_to_use": "svhnresnet18",
     "do_normalization_weights": false,
     "device": "cuda",
     "balance_dataset": false,
     "compute_class_weights": false,
     "separate_val_ds": false,
-    "dataset_type": "MNIST",
+    "dataset_type": "SVHN",
     "percentage_samples_keep": 1,
-    "dataset_folder": "./data/MNIST/"
+    "dataset_folder": "./data/SVHN/"
 }
