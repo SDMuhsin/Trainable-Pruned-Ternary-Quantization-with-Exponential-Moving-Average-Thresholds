@@ -16,3 +16,4 @@ torchinfo
 torchsummary
 torchvision
 tqdm
+tabulate
