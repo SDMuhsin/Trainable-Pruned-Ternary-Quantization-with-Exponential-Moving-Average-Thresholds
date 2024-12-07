@@ -5,14 +5,22 @@ import numpy as np
 from src.utils.nbBitsStoreModel import get_nb_bits_model
 
 def get_compression_rates(exp_folder_model_a, is_model_a_ternarized, exp_folder_model_b, is_model_b_ternarized):
+    list_nb_bits_total_model_a, list_nb_bits_quantized_layers_model_a = get_nb_bits_model(exp_folder_model_a, is_model_a_ternarized)
+    list_nb_bits_total_model_b, list_nb_bits_quantized_layers_model_b = get_nb_bits_model(exp_folder_model_b, is_model_b_ternarized)
 
-    nb_bits_total_model_a, nb_bits_quantized_layers_model_a = get_nb_bits_model(exp_folder_model_a, is_model_a_ternarized)
-    nb_bits_total_model_b, nb_bits_quantized_layers_model_b = get_nb_bits_model(exp_folder_model_b, is_model_b_ternarized)
+    compression_rates_whole = []
+    compression_rates_quantized = []
+    for i in range(len(list_nb_bits_total_model_a)):
+        nb_bits_whole_a = list_nb_bits_total_model_a[i]
+        nb_bits_whole_b = list_nb_bits_total_model_b[i]
+        nb_bits_quantized_a = list_nb_bits_quantized_layers_model_a[i]
+        nb_bits_quantized_b = list_nb_bits_quantized_layers_model_b[i]
+        
+        compression_rates_whole.append(nb_bits_whole_b / nb_bits_whole_a)
+        compression_rates_quantized.append(nb_bits_quantized_b / nb_bits_quantized_a)
 
-    compression_rate_whole = nb_bits_total_model_b / nb_bits_total_model_a
-    compression_rate_quantized = nb_bits_quantized_layers_model_b / nb_bits_quantized_layers_model_a
+    return np.mean(compression_rates_whole), np.mean(compression_rates_quantized)
 
-    return compression_rate_whole, compression_rate_quantized
 def main():
     datasets = ["MNIST_2D_CNN", "FMNIST_RESNET18", "KMNIST_RESNET18", "EMNIST_RESNET18", "SVHN_RESNET18", "CIFAR10_RESNET50", "CIFAR100_RESNET50", "STL10_RESNET50"]
     techniques = ["TTQ", "PTTQ", "experimental_k1"]
