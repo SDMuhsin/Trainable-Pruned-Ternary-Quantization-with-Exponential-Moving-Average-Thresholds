@@ -12,6 +12,7 @@ results/**
 results/*ESR*
 results/*MNIST*
 results/*FMNIST*
+results**
 
 *__pycache__*
 *.pyc
