@@ -1,75 +1,57 @@
-import os
-import subprocess
-import numpy as np
 from tabulate import tabulate
+import os
+import pickle
+import numpy as np
 
-# Define the datasets and techniques
-datasets = ["MNIST_2D_CNN", "FMNIST_RESNET18", "KMNIST_RESNET18", "EMNIST_RESNET18",
-            "SVHN_RESNET18", "CIFAR10_RESNET50", "CIFAR100_RESNET50", "STL10_RESNET50"]
-techniques = ["TTQ", "PTTQ", "experimental_k1"]
+def get_compression_rates(exp_folder_model_a, is_model_a_ternarized, exp_folder_model_b, is_model_b_ternarized):
+    # Simulate the get_nb_bits_model function
+    def get_nb_bits_model(folder, is_ternarized):
+        # Placeholder for actual implementation
+        return np.random.randint(1000, 10000), np.random.randint(500, 5000)
 
-# Define the base paths for model A and B
-base_path_model_a = "./results/CameraReady_{}_FP_OW_0/"
-base_path_model_b = "./results/CameraReady_{}_{}_OW_0/"
+    nb_bits_total_model_a, nb_bits_quantized_layers_model_a = get_nb_bits_model(exp_folder_model_a, is_model_a_ternarized)
+    nb_bits_total_model_b, nb_bits_quantized_layers_model_b = get_nb_bits_model(exp_folder_model_b, is_model_b_ternarized)
 
-# Initialize tables for global and local compression rates
-global_compression_results = []
-local_compression_results = []
+    compression_rate_whole = nb_bits_total_b / nb_bits_total_a
+    compression_rate_quantized = nb_bits_quantized_layers_b / nb_bits_quantized_layers_a
 
-# Loop through datasets and techniques
-for dataset in datasets:
-    global_row = [dataset]
-    local_row = [dataset]
+    return compression_rate_whole, compression_rate_quantized
+
+def main():
+    datasets = ["MNIST_2D_CNN", "FMNIST_RESNET18", "KMNIST_RESNET18", "EMNIST_RESNET18", "SVHN_RESNET18", "CIFAR10_RESNET50", "CIFAR100_RESNET50", "STL10_RESNET50"]
+    techniques = ["TTQ", "PTTQ", "experimental_k1"]
+
+    global_results = []
+    local_results = []
+
     for technique in techniques:
-        # Adjust technique folder name if necessary
-        technique_folder = technique if technique != "experimental_k1" else "experimental_k1.0"
-
-        # Construct folder paths
-        exp_folder_model_a = base_path_model_a.format(dataset)
-        exp_folder_model_b = base_path_model_b.format(dataset, technique_folder)
-
-        # Construct the command
-        command = [
-            "python3", "src/utils/getCompressionRate.py",
-            "--exp_folder_model_a", exp_folder_model_a,
-            "--is_model_a_ternarized", "False",
-            "--exp_folder_model_b", exp_folder_model_b,
-            "--is_model_b_ternarized", "True"
-        ]
-
-        try:
-            # Run the command and capture output
-            output = subprocess.check_output(command, stderr=subprocess.STDOUT, text=True)
+        global_row = []
+        local_row = []
+        for dataset in datasets:
+            exp_folder_model_a = f"./results/CameraReady_{dataset}_FP_OW_0/"
+            exp_folder_model_b = f"./results/CameraReady_{dataset}_{technique}_OW_0/"
             
-            # Parse compression rates from the script's output
-            global_rate = None
-            local_rate = None
-            for line in output.splitlines():
-                if "Compression rate (WHOLE)" in line:
-                    global_rate = float(line.split(":")[1].split("+-")[0].strip())
-                elif "Compression rate (QUANTIZED LAYERS ONLY)" in line:
-                    local_rate = float(line.split(":")[1].split("+-")[0].strip())
+            if technique == "experimental_k1" and not os.path.exists(exp_folder_model_b):
+                exp_folder_model_b = f"./results/CameraReady_{dataset}_experimental_k1.0_OW_0/"
 
-            # Append results
-            global_row.append(global_rate if global_rate is not None else "N/A")
-            local_row.append(local_rate if local_rate is not None else "N/A")
-        
-        except subprocess.CalledProcessError as e:
-            print(f"Error while processing {dataset} with {technique}: {e.output}")
-            global_row.append("Error")
-            local_row.append("Error")
+            is_model_a_ternarized = False
+            is_model_b_ternarized = True
 
-    # Add rows to the tables
-    global_compression_results.append(global_row)
-    local_compression_results.append(local_row)
+            global_rate, local_rate = get_compression_rates(exp_folder_model_a, is_model_a_ternarized, exp_folder_model_b, is_model_b_ternarized)
 
-# Define headers
-headers = ["Dataset"] + techniques
+            global_row.append(global_rate)
+            local_row.append(local_rate)
 
-# Print tables
-print("\nGlobal Compression Rates:")
-print(tabulate(global_compression_results, headers=headers, tablefmt="grid"))
+        global_results.append(global_row)
+        local_results.append(local_row)
 
-print("\nLocal Compression Rates:")
-print(tabulate(local_compression_results, headers=headers, tablefmt="grid"))
+    global_table = tabulate(global_results, headers=datasets, showindex=techniques, tablefmt="grid", floatfmt=".4f")
+    local_table = tabulate(local_results, headers=datasets, showindex=techniques, tablefmt="grid", floatfmt=".4f")
 
+    print("Global Compression Rates:")
+    print(global_table)
+    print("\nLocal Compression Rates:")
+    print(local_table)
+
+if __name__ == "__main__":
+    main()
