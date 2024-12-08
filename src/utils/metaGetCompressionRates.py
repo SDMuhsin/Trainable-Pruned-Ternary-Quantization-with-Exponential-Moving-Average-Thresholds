@@ -41,13 +41,24 @@ def main():
             is_model_a_ternarized = False
             is_model_b_ternarized = True
 
-            (global_gain, global_std), (local_gain, local_std) = get_compression_gains(exp_folder_model_a, is_model_a_ternarized, exp_folder_model_b, is_model_b_ternarized)
+            #(global_gain, global_std), (local_gain, local_std) = get_compression_gains(exp_folder_model_a, is_model_a_ternarized, exp_folder_model_b, is_model_b_ternarized)
+            global_rate, local_rate = get_compression_rates(exp_folder_model_a, is_model_a_ternarized, exp_folder_model_b, is_model_b_ternarized)
 
-            global_row.append(f"{global_gain:.2%} ± {global_std:.2%}")
-            local_row.append(f"{local_gain:.2%} ± {local_std:.2%}")
+            # Convert rates to gains and calculate standard deviation
+            global_gains = [1 - rate for rate in global_rate]
+            local_gains = [1 - rate for rate in local_rate]
+            
+            global_gain_mean = np.mean(global_gains)
+            global_gain_std = np.std(global_gains)
+            local_gain_mean = np.mean(local_gains)
+            local_gain_std = np.std(local_gains)
+
+            global_row.append(f"{global_gain_mean:.2%} ± {global_gain_std:.2%}")
+            local_row.append(f"{local_gain_mean:.2%} ± {local_gain_std:.2%}")
 
         global_results.append(global_row)
         local_results.append(local_row)
+
 
     global_table = tabulate(global_results, headers=datasets, showindex=techniques, tablefmt="grid")
     local_table = tabulate(local_results, headers=datasets, showindex=techniques, tablefmt="grid")
