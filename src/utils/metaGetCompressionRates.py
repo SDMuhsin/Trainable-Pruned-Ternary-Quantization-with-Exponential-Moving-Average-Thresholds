@@ -19,8 +19,7 @@ def get_compression_gains(exp_folder_model_a, is_model_a_ternarized, exp_folder_
         compression_gains_whole.append(1 - (nb_bits_whole_a / nb_bits_whole_b))
         compression_gains_quantized.append(1 - (nb_bits_quantized_a / nb_bits_quantized_b))
 
-    return (np.mean(compression_gains_whole), np.std(compression_gains_whole)), 
-           (np.mean(compression_gains_quantized), np.std(compression_gains_quantized))
+    return (np.mean(compression_gains_whole), np.std(compression_gains_whole)),(np.mean(compression_gains_quantized), np.std(compression_gains_quantized))
 
 def main():
     datasets = ["MNIST_2D_CNN", "FMNIST_RESNET18", "KMNIST_RESNET18", "EMNIST_RESNET18", "SVHN_RESNET18", "CIFAR10_RESNET50", "CIFAR100_RESNET50", "STL10_RESNET50"]
