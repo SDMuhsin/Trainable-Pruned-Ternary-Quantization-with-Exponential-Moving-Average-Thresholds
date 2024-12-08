@@ -136,7 +136,107 @@ def get_nb_bits_model(exp_results_folder, is_model_ternarized):
 
     return list_nb_bits_total_model, list_nb_bits_quantized_layers_model
 
+def get_doReFa_nb_bits_storage(exp_results_folder):
+    """
+    Calculate the number of bits required to store the model (global and quantized layers only).
 
+    Arguments:
+    ----------
+    exp_results_folder: str
+        Path to the folder containing experimental results, including model and params files.
+
+    Returns:
+    --------
+    dict
+        Dictionary containing:
+        - 'nb_total_bits': Total bits required for the full model.
+        - 'nb_quantized_bits': Total bits required for quantized layers.
+        - 'nb_total_weights': Total number of weights in the model.
+        - 'nb_quantized_weights': Number of weights in quantized layers.
+        - 'quantized_percentage': Percentage of weights marked for quantization.
+    """
+    # Load the parameters file
+    params_file = os.path.join(exp_results_folder, "params_exp/params_beginning_0.pth")
+    with open(params_file, 'rb') as pf:
+        params = pickle.load(pf)
+
+    nb_total_bits = 0
+    nb_quantized_bits = 0
+    nb_total_weights = 0
+    nb_quantized_weights = 0
+
+    # Iterate over model files
+    model_folder = os.path.join(exp_results_folder, "model/")
+    for model_file in os.listdir(model_folder):
+        if ('jit' not in model_file.lower()) and ('checkpoint' not in model_file.lower()) and os.path.isfile(os.path.join(model_folder, model_file)):
+            # Load model
+            model_dict = torch.load(os.path.join(model_folder, model_file), map_location=torch.device('cpu'))
+            model = model_dict['model']
+
+            # Get quantized layers
+            params_groups, quantized_layers = get_params_groups_to_quantize(model, params['model_to_use'])
+
+            # Process each parameter
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    num_weights = param.numel()
+                    nb_total_weights += num_weights
+                    nb_total_bits += 32 * num_weights  # Full precision: 32 bits per weight
+                    
+                    if name in quantized_layers:
+                        # For quantized layers, count 1-bit weights + scaling factors (32 bits per layer)
+                        nb_quantized_bits += num_weights + 32
+                        nb_quantized_weights += num_weights
+
+    quantized_percentage = 100 * nb_quantized_weights / nb_total_weights if nb_total_weights > 0 else 0
+
+    return {
+        'nb_total_bits': nb_total_bits,
+        'nb_quantized_bits': nb_quantized_bits,
+        'nb_total_weights': nb_total_weights,
+        'nb_quantized_weights': nb_quantized_weights,
+        'quantized_percentage': quantized_percentage
+    }
+
+def compute_doReFa_compression_gains(storage_info):
+    """
+    Compute global and local compression gains for the model.
+
+    Arguments:
+    ----------
+    storage_info: dict
+        Dictionary containing storage details:
+        - 'nb_total_bits'
+        - 'nb_quantized_bits'
+        - 'nb_total_weights'
+        - 'nb_quantized_weights'
+        - 'quantized_percentage'
+
+    Returns:
+    --------
+    dict
+        Dictionary containing:
+        - 'global_compression_gain': Compression gain for the full model.
+        - 'local_compression_gain': Compression gain for quantized layers only.
+    """
+    nb_total_bits = storage_info['nb_total_bits']
+    nb_quantized_bits = storage_info['nb_quantized_bits']
+    nb_quantized_weights = storage_info['nb_quantized_weights']
+    nb_total_weights = storage_info['nb_total_weights']
+
+    # Compute global compression gain
+    global_compression_gain = 100 - (nb_quantized_bits / nb_total_bits * 100) if nb_total_bits > 0 else 0
+
+    # Compute local compression gain
+    if nb_quantized_weights > 0:
+        local_compression_gain = 100 - ((nb_quantized_bits - (nb_total_bits - 32 * nb_total_weights)) / (32 * nb_quantized_weights) * 100)
+    else:
+        local_compression_gain = 0
+
+    return {
+        'global_compression_gain': global_compression_gain,
+        'local_compression_gain': local_compression_gain
+    }
 def main():
     #==========================================================================#
     # Construct the argument parser
