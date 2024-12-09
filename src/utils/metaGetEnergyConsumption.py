@@ -725,7 +725,6 @@ def compute_energy_consumption(experiment_model_path, model_to_use, input_shape)
 
     return energy_consumption_total_list, energy_consumption_mult_list, nb_mult_adds_list, energy_consumption_32_bit_data_transfer_list, nb_32_bit_memory_transfers_list
 
-
 def main():
     import os
     import numpy as np
@@ -736,6 +735,18 @@ def main():
         "SVHN_RESNET18", "CIFAR10_RESNET50", "CIFAR100_RESNET50", "STL10_RESNET50"
     ]
     techniques = ["TTQ", "PTTQ", "experimental_k1"]
+
+    # Define input shapes for corresponding datasets
+    input_shapes = {
+        "MNIST_2D_CNN": [1, 1, 28, 28],
+        "FMNIST_RESNET18": [1, 3, 32, 32],
+        "KMNIST_RESNET18": [1, 3, 32, 32],
+        "EMNIST_RESNET18": [1, 3, 32, 32],
+        "SVHN_RESNET18": [1, 3, 32, 32],
+        "CIFAR10_RESNET50": [1, 3, 32, 32],
+        "CIFAR100_RESNET50": [1, 3, 32, 32],
+        "STL10_RESNET50": [1, 3, 96, 96]
+    }
 
     # Initialize result storage
     global_results_table = []  # Table for global energy gains
@@ -761,14 +772,25 @@ def main():
                 local_row.append(None)
                 continue
 
+            # Get input shape for the dataset
+            input_shape = input_shapes.get(dataset)
+            if input_shape is None:
+                print(f"Skipping {dataset} due to missing input shape definition.")
+                global_row.append(None)
+                local_row.append(None)
+                continue
+
+            # Define the model type based on dataset name
+            model_to_use = dataset.split('_')[0].lower() + dataset.split('_')[1].lower()
+
             # Compute energy consumption for model A (reference)
             energy_a_total_list, *_ = compute_energy_consumption(
-                exp_folder_model_a, model_to_use=None, input_shape=None
+                exp_folder_model_a, model_to_use=model_to_use, input_shape=input_shape
             )
 
             # Compute energy consumption for model B (target)
             energy_b_total_list, *_ = compute_energy_consumption(
-                exp_folder_model_b, model_to_use=None, input_shape=None
+                exp_folder_model_b, model_to_use=model_to_use, input_shape=input_shape
             )
 
             # Calculate global and local energy gains
@@ -795,5 +817,5 @@ def main():
         print(f"{technique}\t" + "\t".join(f"{val:.2f}" if val is not None else "N/A" for val in row))
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     main()

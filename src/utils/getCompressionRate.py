@@ -70,10 +70,10 @@ def main():
 
 
     # Getting the mean values
-    print("\n\n\n\nCompression rate (WHOLE) between the two models: {} +- {} \n\n\n\n".format(np.mean(compression_rates_whole)*100, np.std(compression_rates_whole)*100))
-    print("\tCompression rate GAIN (WHOLE) between the two models: {} +- {} \n\n\n\n".format(np.mean(compression_rates_gains_whole)*100, np.std(compression_rates_gains_whole)*100))
-    print("\nCompression rate (QUANTIZED LAYERS ONLY) between the two models: {} +- {}\n\n\n\n".format(np.mean(compression_rates_quantized)*100, np.std(compression_rates_quantized)*100))
-    print("\tCompression rate GAIN (QUANTIZED LAYERS ONLY) between the two models: {} +- {}\n\n\n\n".format(np.mean(compression_rates_gains_quantized)*100, np.std(compression_rates_gains_quantized)*100))
+    print("\n\n\n\nCompression rate (WHOLE) between the two models: {:.2f} +- {:.2f} \n\n\n\n".format(np.mean(compression_rates_whole)*100, np.std(compression_rates_whole)*100))
+    print("\tCompression rate GAIN (WHOLE) between the two models: {:.2f} +- {:.2f} \n\n\n\n".format(np.mean(compression_rates_gains_whole)*100, np.std(compression_rates_gains_whole)*100))
+    print("\nCompression rate (QUANTIZED LAYERS ONLY) between the two models: {:.2f} +- {:.2f}\n\n\n\n".format(np.mean(compression_rates_quantized)*100, np.std(compression_rates_quantized)*100))
+    print("\tCompression rate GAIN (QUANTIZED LAYERS ONLY) between the two models: {:.2f} +- {:.2f}\n\n\n\n".format(np.mean(compression_rates_gains_quantized)*100, np.std(compression_rates_gains_quantized)*100))
     #==========================================================================#
     # Storage of the results
     results_to_store = {
