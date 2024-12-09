@@ -226,7 +226,9 @@ def compute_doReFa_compression_gains(storage_info):
     nb_total_weights = storage_info['nb_total_weights']
 
     # Compute global compression gain
-    global_compression_gain = 100 - (nb_quantized_bits / nb_total_bits * 100) if nb_total_bits > 0 else 0
+    nb_total_bits_after_compression = nb_total_bits - (32 * nb_quantized_weights) + nb_quantized_bits
+    global_compression_gain = 100 - (nb_total_bits_after_compression / nb_total_bits * 100) if nb_total_bits > 0 else 0
+    #global_compression_gain = 100 - (nb_quantized_bits / nb_total_bits * 100) if nb_total_bits > 0 else 0
 
     # Compute local compression gain
     if nb_quantized_weights > 0:
