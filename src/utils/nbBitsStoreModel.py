@@ -219,6 +219,7 @@ def compute_doReFa_compression_gains(storage_info):
         - 'global_compression_gain': Compression gain for the full model.
         - 'local_compression_gain': Compression gain for quantized layers only.
     """
+    print(storage_info)
     nb_total_bits = storage_info['nb_total_bits']
     nb_quantized_bits = storage_info['nb_quantized_bits']
     nb_quantized_weights = storage_info['nb_quantized_weights']
