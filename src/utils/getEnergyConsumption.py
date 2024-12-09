@@ -721,7 +721,7 @@ def compute_energy_consumption(experiment_model_path, model_to_use, input_shape)
     print("\n\nEnergy consumption OF MULT-ADDS assuming that all mult-adds have the cost of a 32 float mult: {:.2f} +- {:.2f} mJ\n\n\n".format(np.mean(energy_consumption_mult_list)*1000, np.std(energy_consumption_mult_list)*1000))
     print("\nEnergy consumption OF DATA TRANSFERS: {:.2f} +- {:.2f} mJ\n\n\n".format(np.mean(energy_consumption_32_bit_data_transfer_list)*1000, np.std(energy_consumption_32_bit_data_transfer_list)*1000))
     print("\nEnergy consumption TOTAL assuming that all mult-adds have the cost of a 32 float mult: {:.2f} +- {:.2f} mJ\n\n\n".format(np.mean(energy_consumption_total_list)*1000, np.std(energy_consumption_total_list)*1000))
-    print("\n=======>Total Energy Gain: {:.2f} +- {:.2f} %".format(38.27701643353544, 3.156576849396528e-05))
+    #print("\n=======>Total Energy Gain: {:.2f} +- {:.2f} %".format(38.27701643353544, 3.156576849396528e-05))
 
     return energy_consumption_total_list, energy_consumption_mult_list, nb_mult_adds_list, energy_consumption_32_bit_data_transfer_list, nb_32_bit_memory_transfers_list
 
@@ -812,7 +812,7 @@ def main():
 
         # Energy gain
         energy_gain = np.abs(ref_energy_consumption_total_list - energy_consumption_total_list)/ref_energy_consumption_total_list
-        print("\n\n=======>Total Energy Gain: {} +- {} %\n\n\n".format(np.mean(energy_gain)*100, np.std(energy_gain)*100))
+        print("\n\n=======>Total Energy Gain: {:.2f} +- {:.2f} %\n\n\n".format(np.mean(energy_gain)*100, np.std(energy_gain)*100))
 
         # Storage of the results
         ref_results_to_store = {
