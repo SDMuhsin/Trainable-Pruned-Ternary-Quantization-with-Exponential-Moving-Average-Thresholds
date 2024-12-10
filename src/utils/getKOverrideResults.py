@@ -1,3 +1,11 @@
+'''
+    How to use 
+     python3 src/utils/getKOverrideResults.py --base_pattern=./results/CameraReady_SVHN_RESNET18_experimental_k{}_OW_0/metrics/results_exp-CameraReady_SVHN_RESNET18_experimental_k{}_rep-*.pth
+     The {} tells the code to iterate through all values of k, the * tells the code to iterate through all repetitions
+
+'''
+
+
 import argparse
 import pickle
 import glob
@@ -64,7 +72,12 @@ def consolidate_results(base_pattern):
             print(f"No files found for k={k_rounded}.")
 
     return consolidated_results, prefix
+'''
+    How to use 
+     python3 src/utils/getKOverrideResults.py --base_pattern=./results/CameraReady_SVHN_RESNET18_experimental_k{}_OW_0/metrics/results_exp-CameraReady_SVHN_RESNET18_experimental_k{}_rep-*.pth
+     The {} tells the code to iterate through all values of k, the * tells the code to iterate through all repetitions
 
+'''
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--base_pattern', required=True, help="Base pattern for file search.")

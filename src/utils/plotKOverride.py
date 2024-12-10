@@ -28,7 +28,7 @@ def extract_data(json_data):
         if k in ["TTQ", "pTTQ"]:
             labels.append(k)
         else:
-            labels.append("EMA PTTQ")
+            labels.append(f"EMA PTTQ")
     
     return np.array(sparsity), np.array(mcc), np.array(mcc_std), labels
 
@@ -41,27 +41,35 @@ def plot_pareto_frontier(sparsity, mcc, mcc_std, output_file, labels):
     mcc_std_sorted = mcc_std[sorted_indices]
     labels_sorted = [labels[i] for i in sorted_indices]
 
-    # Find the Pareto frontier
-    pareto_frontier = mcc_sorted[np.argsort(-mcc_sorted)]
-    pareto_sparsity = sparsity_sorted[np.argsort(-mcc_sorted)]
-    pareto_std = mcc_std_sorted[np.argsort(-mcc_sorted)]
-    
-    plt.figure(figsize=(10, 6))
+    # Pareto frontier (sorting by sparsity but finding decreasing MCC values)
+    pareto_indices = np.argsort(-mcc_sorted)
+    pareto_frontier = mcc_sorted[pareto_indices]
+    pareto_sparsity = sparsity_sorted[pareto_indices]
+    pareto_std = mcc_std_sorted[pareto_indices]
+    pareto_labels = [labels_sorted[i] for i in pareto_indices]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
 
     # Plotting with error bars
-    for label in set(labels_sorted):
-        indices = [i for i, l in enumerate(labels_sorted) if l == label]
-        plt.errorbar(pareto_sparsity[indices], pareto_frontier[indices], 
-                     yerr=pareto_std[indices], fmt='o', label=label, capsize=5)
+    for label in set(pareto_labels):
+        indices = [i for i, l in enumerate(pareto_labels) if l == label]
+        ax.errorbar(pareto_sparsity[indices], pareto_frontier[indices],
+                    yerr=pareto_std[indices], fmt='o', label=label, capsize=5)
 
-    plt.title('Pareto Frontier of Sparsity vs MCC')
-    plt.xlabel('Average Sparsity at Best Metric (%)')
-    plt.ylabel('Average Best Metric (MCC)')
-    plt.grid()
-    plt.legend()
-    
+    ax.set_title('Pareto Frontier of Sparsity vs MCC')
+    ax.set_xlabel('Average Sparsity at Best Metric (%)')
+    ax.set_ylabel('Average Best Metric (MCC)')
+    ax.grid()
+
+    # Adjust the plot layout to make room for the legend
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.2)
+
+    # Place the legend outside the plot at the bottom
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
+
     # Save the plot
-    plt.savefig(output_file)
+    plt.savefig(output_file, bbox_inches='tight')
     plt.close()
 
 def main():
