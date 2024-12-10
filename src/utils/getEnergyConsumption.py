@@ -760,7 +760,7 @@ def main():
         input_shape = (bs, 1, 20, 20)
     elif (model_to_use.lower() in ['svhnresnet18']):
         input_shape = (bs, 3, 20,20)
-    elif (model_to_use.lower() in ['cifar10resnet50']):
+    elif (model_to_use.lower() in ['cifar10resnet50','stl10resnet50']):
         input_shape = (bs,3,32,32)
     elif (model_to_use.lower() in ['cifar100resnet50']):
         input_shape = (bs,3,32,32)
