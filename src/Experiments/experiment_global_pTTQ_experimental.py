@@ -40,7 +40,7 @@ from labml_nn.optimizers import noam
 from src.Experiments.experiment_TTQ import Experiment as ExperimentTTQ
 
 from src.utils.GCE import GeneralizedCrossEntropy
-from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi
+from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi, pruning_function_pTTQ_experimental
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN # Network used for training
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
@@ -98,6 +98,10 @@ class Experiment(ExperimentTTQ):
             self.pruning_function = pruning_function_pTTQ
         elif (self.pruning_function_type.lower() == 'manessi_asymmetric'):
             self.pruning_function = pruning_function_asymmetric_manessi
+        elif (self.pruning_function_type.lower() == 'experimental'):
+            self.pruning_function = pruning_function_pTTQ_experimental
+        elif (self.pruning_function_type.lower() == 'experimental_learned'):
+            self.pruning_function = pruning_function_pTTQ_experimental_learned
         else:
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
 
@@ -129,7 +133,6 @@ class Experiment(ExperimentTTQ):
         return w_p*A + (-w_n*B)
 
     # Gradients computation
-    # FUNCTION USED BEFORE SWAPPING TO TANH INSTEAD OF SIGMOID !!!
     def get_grads(self, kernel_grad, kernel, w_p, w_n):
         """
         Function from: https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
@@ -148,19 +151,17 @@ class Experiment(ExperimentTTQ):
             6. gradient for alpha
         """
         # Grads of w_p and w_n
-        # pruned_kernel = self.pruning_function(kernel, alpha=self.alpha, a=self.a, b=self.b)
         pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
-        # scaled kernel grad and grads for scaling factors (w_p, w_n)
         grad_fp_kernel = w_p*A*kernel_grad + w_n*B*kernel_grad + 1.0*c*kernel_grad
         grad_wp = (A*kernel_grad).sum()
         grad_wn = (B*kernel_grad).sum()
 
         # Grads
-        if (self.pruning_function_type == 'manessi_asymmetric_pTTQ'):
-            # Grands thresholds
+        if (self.pruning_function_type in ['manessi_asymmetric_pTTQ','experimental']): # Both these use stats based thresholds
+            # Grads of the thresholds hyperparameters
             kernel_mean, kernel_std = kernel.mean(), kernel.std()
             delta_min = (kernel_mean + self.a*kernel_std).abs()
             delta_max = (kernel_mean + self.b*kernel_std).abs()
@@ -178,21 +179,22 @@ class Experiment(ExperimentTTQ):
             grad_alpha = (delta_max*(kernel-delta_max)*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))\
                         + delta_min*(kernel+delta_min)*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))).sum()
 
-        elif (self.pruning_function_type == 'manessi_asymmetric'):
+        elif (self.pruning_function_type in ['manessi_asymmetric','experimental_learned']): # Both these use learnable thresholds 
             # Grads of w_p and w_n
             grad_a = (
-                        torch.heaviside((-kernel-self.a).float(),  torch.tensor([0]).float().to(self.device))\
+                        torch.heaviside((-kernel-self.a).float(),  torch.tensor([0]).float().to(self.device) )\
                         - torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))\
                         + self.a*self.alpha*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))
                      ).sum()
             grad_b = (
-                        -torch.heaviside((kernel-self.b).float(),  torch.tensor([0]).float().to(self.device))\
+                        -torch.heaviside((kernel-self.b).float(),  torch.tensor([0]).float().to(self.device) )\
                         + torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))\
                         - self.b*self.alpha*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))
                      ).sum()
             # Grads of alpha
             grad_alpha = (self.b*(kernel-self.b)*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))\
                         + self.a*(kernel+self.a)*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))).sum()
+
 
         else:
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))

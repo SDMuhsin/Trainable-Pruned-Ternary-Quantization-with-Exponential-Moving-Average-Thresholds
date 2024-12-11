@@ -1,5 +1,5 @@
 {
-    "exp_id": "MNIST_2D_CNN_pTTQ_Global_Granularity",
+    "exp_id": "EXP4_MNIST_2D_CNN_experimental",
     "lr": 0.001,
     "lr_wn_wp": 0.0001,
     "lr_thresh": 0.0001,
@@ -9,20 +9,21 @@
     "weight_decay": 0,
     "nb_epochs": 50,
     "loss_function": "CE",
-    "pruning_function_type": "manessi_asymmetric",
+    "pruning_function_type": "experimental",
+    "k":1,
     "alpha": 100,
     "init_x": 1.0,
     "init_y": 1.0,
     "optimize_alpha": false,
-    "trained_fp_models_folder": "../../results/MNIST_2D_CNN_FP/model/",
+    "trained_fp_models_folder": "./results/CameraReady_MNIST_2D_CNN_FP_OW_0/model/",
     "model_type": "2DCNN",
     "model_to_use": "Mnist2DCnn",
     "do_normalization_weights": false,
-    "device": "cpu",
+    "device": "cuda",
     "balance_dataset": false,
     "compute_class_weights": false,
     "separate_val_ds": false,
     "dataset_type": "MNIST",
     "percentage_samples_keep": 1,
-    "dataset_folder": "../../data/MNIST/"
+    "dataset_folder": "./data/MNIST/"
 }
