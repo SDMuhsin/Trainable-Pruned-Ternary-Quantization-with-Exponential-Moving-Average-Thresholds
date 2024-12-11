@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Beginning k override sbatch scripts for MNIST"
+echo "Beginning EXP3 sbatch scripts for MNIST"
 
 sbatch \
 	--nodes=1 \
@@ -10,7 +10,7 @@ sbatch \
 	--mem=6000M \
 	--time=2-00:00 \
 	--chdir=/scratch/sdmuhsin/Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds \
-	--output=mnist-exp3-%N-%j.out \
+	--output=mnist-exp3-pttq-%N-%j.out \
 	--wrap="
 	    module load python/3.10
 	    module load arrow/16.1.0
@@ -18,7 +18,7 @@ sbatch \
 	    echo 'Environment loaded'
 	    which python3
 	    export PYTHONPATH=\"\$PYTHONPATH:\$(pwd)\"
-	    python3 src/Experiments/experiment_TTQ.py --parameters_file=./parameters_files/MNIST/mnist_exp3.json
+	    python3 src/Experiments/experiment_pTTQ.py --parameters_file=./parameters_files/MNIST/mnist_exp3_pTTQ.json
 	"
 
 echo "All jobs submitted"

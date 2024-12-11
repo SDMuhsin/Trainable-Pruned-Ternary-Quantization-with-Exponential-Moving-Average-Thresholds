@@ -40,7 +40,7 @@ from labml_nn.optimizers import noam
 from src.Experiments.experiment_TTQ import Experiment as ExperimentTTQ
 
 from src.utils.GCE import GeneralizedCrossEntropy
-from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi,pruning_function_pTTQ_experimental
+from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi,pruning_function_pTTQ_experimental,pruning_function_pTTQ_experimental_learned
 
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN # Network used for training
@@ -121,8 +121,9 @@ class Experiment(ExperimentTTQ):
             self.pruning_function = pruning_function_asymmetric_manessi
         elif (self.pruning_function_type.lower() == 'experimental'):
             self.pruning_function = pruning_function_pTTQ_experimental
+        elif (self.pruning_function_type.lower() == 'experimental_learned'):
+            self.pruning_function = pruning_function_pTTQ_experimental_learned
         else:
-            p
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
 
         # Optimizer to use for thresholds and alpha
@@ -185,7 +186,7 @@ class Experiment(ExperimentTTQ):
         grad_wn = (B*kernel_grad).sum()
 
         # Grads
-        if (self.pruning_function_type in ['manessi_asymmetric_pTTQ','experimental']):
+        if (self.pruning_function_type in ['manessi_asymmetric_pTTQ','experimental']): # Both these use stats based thresholds
             # Grads of the thresholds hyperparameters
             kernel_mean, kernel_std = kernel.mean(), kernel.std()
             delta_min = (kernel_mean + self.a*kernel_std).abs()
@@ -204,7 +205,7 @@ class Experiment(ExperimentTTQ):
             grad_alpha = (delta_max*(kernel-delta_max)*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))\
                         + delta_min*(kernel+delta_min)*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))).sum()
 
-        elif (self.pruning_function_type == 'manessi_asymmetric'):
+        elif (self.pruning_function_type in ['manessi_asymmetric','experimental_learned']): # Both these use learnable thresholds 
             # Grads of w_p and w_n
             grad_a = (
                         torch.heaviside((-kernel-self.a).float(),  torch.tensor([0]).float().to(self.device) )\

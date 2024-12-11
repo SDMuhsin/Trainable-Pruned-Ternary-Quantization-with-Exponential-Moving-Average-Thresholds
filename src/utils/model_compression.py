@@ -403,6 +403,37 @@ def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1):
           relu(-x - k * delta_min) - k * delta_min * sigmoid(alpha * (-x - k * delta_min))
 
     return res
+def pruning_function_pTTQ_experimental_learned(x, alpha, a, b, k=1):
+    """
+        Pruning function similar to pruning_function_pTTQ_experimental,
+        but thresholds are learnable instead of being computed via EMA.
+
+        Arguments:
+        ----------
+        x: torch.tensor
+            Tensor to 'prune'.
+        alpha: float
+            Hyper-parameter defining the 'speed' of the pruning.
+        a: float
+            Learnable NON-NEGATIVE threshold parameter for the lower bound.
+        b: float
+            Learnable NON-NEGATIVE threshold parameter for the upper bound.
+        k: float
+            Tunable constant to temper pruning aggressiveness (default is 1).
+    """
+    # Verifying that the values of a and b are non-negative
+    if (type(a) != torch.Tensor) and (type(b) != torch.Tensor):
+        assert (a >= 0) and (b >= 0)  # Cannot be used for tensors
+
+    # Define the ReLU and Sigmoid functions
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Compute the output using learnable thresholds
+    res = relu(x - k * b) + k * b * sigmoid(alpha * (x - k * b)) - \
+          relu(-x - k * a) - k * a * sigmoid(alpha * (-x - k * a))
+
+    return res
 
 # EMA V2
 def pruning_function_pTTQ_ema_v2(x, alpha, t_min, t_max):

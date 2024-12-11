@@ -104,7 +104,6 @@ class Experiment(ExperimentTTQ):
         elif (self.pruning_function_type.lower() == 'manessi_asymmetric'):
             self.pruning_function = pruning_function_asymmetric_manessi
         else:
-            p
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
 
         # Optimizer to use for thresholds and alpha
