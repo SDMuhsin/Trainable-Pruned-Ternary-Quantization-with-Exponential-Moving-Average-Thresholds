@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Beginning k override sbatch scripts for CIFAR10"
+echo "Beginning exp3 sbatch scripts for CIFAR10"
 
 sbatch \
 	--nodes=1 \
@@ -10,7 +10,7 @@ sbatch \
 	--mem=8000M \
 	--time=3-00:00 \
 	--chdir=/scratch/sdmuhsin/Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds \
-	--output=cifar10-exp3-%N-%j.out \
+	--output=cifar10-exp3-experimental-%N-%j.out \
 	--wrap="
 	    module load python/3.10
 	    module load arrow/16.1.0
@@ -18,7 +18,7 @@ sbatch \
 	    echo 'Environment loaded'
 	    which python3
 	    export PYTHONPATH=\"\$PYTHONPATH:\$(pwd)\"
-	    python3 src/Experiments/experiment_TTQ.py --parameters_file=./parameters_files/CIFAR10/cifar10_exp3.json
+	    python3 src/Experiments/experiment_pTTQ_experimental.py --parameters_file=./parameters_files/CIFAR10/cifar10_exp3_experimental.json
 	"
 
 echo "All jobs submitted"
