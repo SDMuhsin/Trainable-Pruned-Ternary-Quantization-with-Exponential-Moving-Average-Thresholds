@@ -1,18 +1,17 @@
 {
     "exp_id": "EXP4_MNIST_2D_CNN_experimental",
-    "lr": 5e-06,
-    "lr_wn_wp": 5e-06,
-    "lr_thresh": 5e-06,
+    "lr": 0.001,
+    "lr_wn_wp": 0.0001,
+    "lr_thresh": 0.0001,
     "nb_repetitions": 10,
     "batch_size_train": 32,
     "batch_size_test": 32,
     "weight_decay": 0,
     "nb_epochs": 50,
     "loss_function": "CE",
-    "k": 1,
-    "optimizer_pruning_params": "Adamax",
     "pruning_function_type": "experimental",
-    "alpha": 10000.0,
+    "k":0.1,
+    "alpha": 100,
     "init_x": 1.0,
     "init_y": 1.0,
     "optimize_alpha": false,
@@ -26,6 +25,5 @@
     "separate_val_ds": false,
     "dataset_type": "MNIST",
     "percentage_samples_keep": 1,
-    "dataset_folder": "./data/MNIST/",
-    "doGridSearch":true
+    "dataset_folder": "./data/MNIST/"
 }

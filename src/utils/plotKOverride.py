@@ -56,9 +56,9 @@ def plot_pareto_frontier(sparsity, mcc, mcc_std, output_file, labels):
         ax.errorbar(pareto_sparsity[indices], pareto_frontier[indices],
                     yerr=pareto_std[indices], fmt='o', label=label, capsize=5)
 
-    ax.set_title('Pareto Frontier of Sparsity vs MCC')
-    ax.set_xlabel('Average Sparsity at Best Metric (%)')
-    ax.set_ylabel('Average Best Metric (MCC)')
+    ax.set_title('Sparsity vs MCC for various ternary quantization approaches')
+    ax.set_xlabel('Average Sparsity (%)')
+    ax.set_ylabel('Average MCC (%))')
     ax.grid()
 
     # Adjust the plot layout to make room for the legend
