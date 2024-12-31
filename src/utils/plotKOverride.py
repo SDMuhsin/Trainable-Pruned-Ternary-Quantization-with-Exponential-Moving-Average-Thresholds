@@ -28,8 +28,8 @@ def extract_data(json_data):
         if k in ["TTQ", "pTTQ"]:
             labels.append(k)
         else:
-            labels.append(f"EMA PTTQ")
-    
+            labels.append("EMA PTTQ")  # Force label for anything else
+
     return np.array(sparsity), np.array(mcc), np.array(mcc_std), labels
 
 def plot_pareto_frontier(sparsity, mcc, mcc_std, output_file, labels):
@@ -50,15 +50,29 @@ def plot_pareto_frontier(sparsity, mcc, mcc_std, output_file, labels):
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    # Define a consistent color mapping for labels
+    label_colors = {
+        "TTQ": "blue",
+        "pTTQ": "orange",
+        "EMA PTTQ": "green"
+    }
+
     # Plotting with error bars
     for label in set(pareto_labels):
         indices = [i for i, l in enumerate(pareto_labels) if l == label]
-        ax.errorbar(pareto_sparsity[indices], pareto_frontier[indices],
-                    yerr=pareto_std[indices], fmt='o', label=label, capsize=5)
+        ax.errorbar(
+            pareto_sparsity[indices],
+            pareto_frontier[indices],
+            yerr=pareto_std[indices],
+            fmt='o',
+            label=label,
+            color=label_colors.get(label, "black"),  # Default to black if not in dict
+            capsize=5
+        )
 
     ax.set_title('Sparsity vs MCC for various ternary quantization approaches')
     ax.set_xlabel('Average Sparsity (%)')
-    ax.set_ylabel('Average MCC (%))')
+    ax.set_ylabel('Average MCC (%)')
     ax.grid()
 
     # Adjust the plot layout to make room for the legend
@@ -92,3 +106,4 @@ def main():
     
 if __name__ == '__main__':
     main()
+
