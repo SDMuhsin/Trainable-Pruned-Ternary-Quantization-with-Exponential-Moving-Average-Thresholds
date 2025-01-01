@@ -330,6 +330,44 @@ def pruning_function_pTTQ(x, alpha, t_min, t_max):
 
     return res
 
+def pruning_function_pTTQ_track(x, alpha, t_min, t_max):
+    """
+        Function inspired from the work of Manessi et al. (2019)
+        Compute a pruning function of the input tensor x
+        based on two threshold depending on the weight statistics, at a "speed" alpha.
+        WARNING: there is not actual pruning that is done, but the value of x is
+        set very close to zero if it is in an interval defined by the thresholds.
+        IMPORTANT: WE MAKE THE HYPOTHESIS THAT THE WEIGHTS MEAN IS RELATIVELY CLOSE
+        TO ZERO, AND THAT WE HAVE TWO THRESHOLDS, ONE FOR THE POSITIVE AND ONE
+        FOR THE NEGATIVE WEIGHTS.
+
+        Arguments:
+        ----------
+        x: torch.tensor
+            Tensor to 'prune'
+        alpha: float
+            Hyper-parameter defining the 'speed' of the pruning.
+        t_min: float
+            Real (positive or negative) parameter used to compute the threshold
+            parameter of the pruning based on the weights statistics.
+        t_max: float
+            Real (positive or negative) parameter used to compute the threshold
+            parameter of the pruning based on the weights statistics.
+    """
+    # Defining the ReLU and Sigmoid functions
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Defining the thresholds
+    x_mean, x_std = x.mean(), x.std()
+    delta_min = (x_mean + t_min*x_std).abs()
+    delta_max = (x_mean + t_max*x_std).abs()
+
+    # Computing the output
+    res = relu(x-delta_max)+delta_max*sigmoid(alpha*(x-delta_max)) - relu(-x-delta_min)-delta_min*sigmoid(alpha*(-x-delta_min))
+
+    return res, delta_min, delta_max
+
 def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_epochs):
     """
     Enhanced pruning function with Gradual Sparsity Increase and Annealing (GSIA).
@@ -374,7 +412,42 @@ def pruning_function_pTTQ_GSIA_old(x, alpha, t_min, t_max, current_epoch, total_
 
     return res
 
+
+import json
+import os
+import hashlib
+
+
 # EMA V3
+def pruning_function_pTTQ_experimental_track(x, alpha, t_min, t_max,k=1):
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # Compute statistics
+    x_mean, x_std = x.mean(), x.std()
+    
+    # Compute adaptive thresholds with exponential moving average
+    with torch.no_grad():
+        if not hasattr(pruning_function_pTTQ_experimental, 'ema_min'):
+            pruning_function_pTTQ_experimental.ema_min = (x_mean + t_min * x_std).abs()
+            pruning_function_pTTQ_experimental.ema_max = (x_mean + t_max * x_std).abs()
+        else:
+            beta = 0.9  # EMA decay factor
+            pruning_function_pTTQ_experimental.ema_min = beta * pruning_function_pTTQ_experimental.ema_min + (1 - beta) * (x_mean + t_min * x_std).abs()
+            pruning_function_pTTQ_experimental.ema_max = beta * pruning_function_pTTQ_experimental.ema_max + (1 - beta) * (x_mean + t_max * x_std).abs()
+
+    delta_min = pruning_function_pTTQ_experimental.ema_min
+    delta_max = pruning_function_pTTQ_experimental.ema_max
+
+    # Introduce a tunable constant to temper pruning aggressiveness
+    #k = 1  # This value can be adjusted between 0 and 1
+
+    # Apply pruning with adaptive thresholds and tempered aggressiveness
+    res = relu(x - k * delta_max) + k * delta_max * sigmoid(alpha * (x - k * delta_max)) - \
+          relu(-x - k * delta_min) - k * delta_min * sigmoid(alpha * (-x - k * delta_min))
+
+    return res, delta_min, delta_max
+
 def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
@@ -403,6 +476,9 @@ def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1):
           relu(-x - k * delta_min) - k * delta_min * sigmoid(alpha * (-x - k * delta_min))
 
     return res
+
+
+
 def pruning_function_pTTQ_experimental_learned(x, alpha, a, b, k=1):
     """
         Pruning function similar to pruning_function_pTTQ_experimental,

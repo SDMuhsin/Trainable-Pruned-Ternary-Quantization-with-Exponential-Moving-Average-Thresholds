@@ -15,6 +15,8 @@ import pickle
 import argparse
 from tqdm import tqdm
 
+import csv
+import os
 import random
 
 import numpy as np
@@ -40,10 +42,15 @@ from labml_nn.optimizers import noam
 from src.Experiments.experiment_TTQ import Experiment as ExperimentTTQ
 
 from src.utils.GCE import GeneralizedCrossEntropy
-from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi
+from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi, pruning_function_pTTQ_track
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN # Network used for training
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
+
+
+
+
+
 
 #==============================================================================#
 #======================== Defining the experiment class ========================#
@@ -62,6 +69,10 @@ class Experiment(ExperimentTTQ):
         """
         # Parent constructor
         super().__init__(parameters_exp)
+        
+        self.step_counter = 0
+        self.delta_mins = {}
+        self.delta_maxes = {}
 
         # Some attributes
         # Optimizing the pruning function parameters
@@ -100,7 +111,7 @@ class Experiment(ExperimentTTQ):
             parameters_exp['pruning_function_type'] = 'manessi_asymmetric_pTTQ'
         self.pruning_function_type = parameters_exp['pruning_function_type']
         if (self.pruning_function_type.lower() == 'manessi_asymmetric_pttq'):
-            self.pruning_function = pruning_function_pTTQ
+            self.pruning_function = pruning_function_pTTQ_track
         elif (self.pruning_function_type.lower() == 'manessi_asymmetric'):
             self.pruning_function = pruning_function_asymmetric_manessi
         else:
@@ -121,8 +132,18 @@ class Experiment(ExperimentTTQ):
         # Parameters of the exp
         self.parameters_exp = parameters_exp
 
+    def save_thresholds(self):
+        data = {
+            'delta_mins': self.delta_mins,
+            'delta_maxes': self.delta_maxes
+        }
+        np.save('./results/track_thresholds_pttq.npy', data)
 
-    # Quantization function
+    def load_thresholds(self):
+        data = np.load('./results/track_thresholds_pttq.npy', allow_pickle=True).item()
+        self.delta_mins = data['delta_mins']
+        self.delta_maxes = data['delta_maxes']
+        # Quantization function
     def quantize(self, kernel, w_p, w_n):
         """
         Function from inspired from https://github.com/TropComplique/trained-ternary-quantization/blob/master/utils/quantization.py
@@ -133,10 +154,10 @@ class Experiment(ExperimentTTQ):
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
         """
         # Getting the pruned kernel
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        pruned_kernel,delta_min,delta_max = self.pruning_function(kernel, self.alpha, self.a, self.b)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
-        return w_p*A + (-w_n*B)
+        return w_p*A + (-w_n*B), delta_min, delta_max
 
     # Gradients computation
     def get_grads(self, kernel_grad, kernel, w_p, w_n):
@@ -157,7 +178,7 @@ class Experiment(ExperimentTTQ):
             6. gradient for alpha
         """
         # Grads of w_p and w_n
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        pruned_kernel, _, _ = self.pruning_function(kernel, self.alpha, self.a, self.b)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
@@ -260,7 +281,7 @@ class Experiment(ExperimentTTQ):
                 self.alpha = alpha_initial
 
             # Doing quantization
-            k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial)
+            k.data,_,_ = self.quantize(k_fp.data, w_p_initial, w_n_initial)
 
         # Getting the optimizers for the FP kernels and the scaling factors
         # FP kernels
@@ -427,12 +448,24 @@ class Experiment(ExperimentTTQ):
             # Getting the thresholds used for pruning
             t = thresholds[i]
             self.a, self.b = t.data[0], t.data[1]
-
+            
             # Getting the alpha values used for pruning
             if (self.optimize_alpha):
                 alpha_val = alphas[i]
                 self.alpha = alpha_val.data[0]
-            k.data = self.quantize(k_fp.data, w_p, w_n)
+            k.data, delta_min, delta_max = self.quantize(k_fp.data, w_p, w_n)
+            
+            if(str(i) not in self.delta_mins):
+                self.delta_mins[str(i)] = [ delta_min ]
+            else:
+                self.delta_mins[str(i)].append( float( delta_min.cpu().detach().numpy() ) )
+
+            if(str(i) not in self.delta_maxes):
+                self.delta_maxes[str(i)] = [delta_max]
+            else:
+                self.delta_maxes[str(i)].append( float( delta_max.cpu().detach().numpy() ) )
+        
+        self.save_thresholds()
 
     def gridSearch(self):
         """
