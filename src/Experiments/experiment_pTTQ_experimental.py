@@ -104,8 +104,12 @@ class Experiment(ExperimentTTQ):
         self.k = parameters_exp['k']
         if(parameters_exp['k_override'] != None):
             self.k = parameters_exp['k_override']
+        
+        self.beta = 0.9
+        if(parameters_exp['beta'] != None):
+            self.beta = parameters_exp['beta']
 
-        self.exp_id += f"_k{self.k}"
+        self.exp_id += f"_k{self.k}_beta{self.beta}" 
         parameters_exp['exp_id'] = self.exp_id
 
 
@@ -153,7 +157,7 @@ class Experiment(ExperimentTTQ):
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
         """
         # Getting the pruned kernel
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b,self.k)
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         return w_p*A + (-w_n*B)
@@ -177,7 +181,7 @@ class Experiment(ExperimentTTQ):
             6. gradient for alpha
         """
         # Grads of w_p and w_n
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
@@ -569,6 +573,7 @@ def main():
     default_parameters_file = "./parameters_files/MNIST/mnist_pTTQ.json"
     ap.add_argument('--parameters_file', default=default_parameters_file, help="Parameters for the experiment", type=str)
     ap.add_argument('--k_override', default= None, help = "Override k with this value for experimental pTTQ", type= float)
+    ap.add_argument('--beta', default= 0.9, help = "beta value for experimental pTTQ", type= float)
     args = vars(ap.parse_args())
 
     # Getting the value of the arguments
@@ -577,6 +582,7 @@ def main():
         parameters_exp = json.load(jf)
     
     parameters_exp['k_override'] = args['k_override'] 
+    parameters_exp['beta'] = args['beta']
 
     # Grid search parameter in the parameters file
     if ('doGridSearch' not in parameters_exp):

@@ -448,7 +448,7 @@ def pruning_function_pTTQ_experimental_track(x, alpha, t_min, t_max,k=1):
 
     return res, delta_min, delta_max
 
-def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1):
+def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1, beta = 0.9):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
 
@@ -461,7 +461,6 @@ def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1):
             pruning_function_pTTQ_experimental.ema_min = (x_mean + t_min * x_std).abs()
             pruning_function_pTTQ_experimental.ema_max = (x_mean + t_max * x_std).abs()
         else:
-            beta = 0.9  # EMA decay factor
             pruning_function_pTTQ_experimental.ema_min = beta * pruning_function_pTTQ_experimental.ema_min + (1 - beta) * (x_mean + t_min * x_std).abs()
             pruning_function_pTTQ_experimental.ema_max = beta * pruning_function_pTTQ_experimental.ema_max + (1 - beta) * (x_mean + t_max * x_std).abs()
 

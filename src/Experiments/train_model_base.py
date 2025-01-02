@@ -1251,6 +1251,7 @@ def main():
     default_parameters_file = "../../parameters_files/MNIST/mnist_FP.json"
     ap.add_argument('--parameters_file', default=default_parameters_file, help="Parameters for the experiment", type=str)
     ap.add_argument('--k_override',default=None,help="Override value of k from parameters file for experimental pTTQ", type=float)
+    ap.add_argument('--beta',default=0.9,help="Override value of k from parameters file for experimental pTTQ", type=float)
     args = vars(ap.parse_args())
 
     
@@ -1260,6 +1261,8 @@ def main():
         parameters_exp = json.load(jf)
 
     parameters_exp['k_override'] = args['k_override']
+    parameters_exp['beta'] = args['beta']
+
 
     # Grid search parameter in the parameters file
     if ('doGridSearch' not in parameters_exp):
