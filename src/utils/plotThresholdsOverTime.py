@@ -78,16 +78,16 @@ def main():
     exp_delta_mins = convert_list_to_floats(exp_delta_mins_raw)
     exp_delta_maxes = convert_list_to_floats(exp_delta_maxes_raw)
 
-    # --- Remove first 10% of the data ---
+    # --- Remove first 1% of the data ---
     # pTTQ
     n_pttq = len(pttq_delta_mins)
-    start_pttq = int( 0 * n_pttq)
+    start_pttq = int(0.01 * n_pttq)
     pttq_delta_mins = pttq_delta_mins[start_pttq:]
     pttq_delta_maxes = pttq_delta_maxes[start_pttq:]
 
     # EMA-pTTQ
     n_exp = len(exp_delta_mins)
-    start_exp = int( 0 * n_exp)
+    start_exp = int(0.01 * n_exp)
     exp_delta_mins = exp_delta_mins[start_exp:]
     exp_delta_maxes = exp_delta_maxes[start_exp:]
 
@@ -110,6 +110,22 @@ def main():
     print(f"  pTTQ Δ_max : {smooth_pttq_max:.6f}")
     print(f"  EMA-pTTQ Δ_min : {smooth_exp_min:.6f}")
     print(f"  EMA-pTTQ Δ_max : {smooth_exp_max:.6f}")
+
+    # ------------------------------------------------------------------
+    # NEW BLOCK: Normalize each curve to start at 0 (AFTER smoothness)
+    # ------------------------------------------------------------------
+    if num_steps_pttq > 0:
+        offset_pttq_min = pttq_delta_mins[0]
+        offset_pttq_max = pttq_delta_maxes[0]
+        pttq_delta_mins = [v - offset_pttq_min for v in pttq_delta_mins]
+        pttq_delta_maxes = [v - offset_pttq_max for v in pttq_delta_maxes]
+
+    if num_steps_exp > 0:
+        offset_exp_min = exp_delta_mins[0]
+        offset_exp_max = exp_delta_maxes[0]
+        exp_delta_mins = [v - offset_exp_min for v in exp_delta_mins]
+        exp_delta_maxes = [v - offset_exp_max for v in exp_delta_maxes]
+    # ------------------------------------------------------------------
 
     # --- Plot ---
     plt.figure(figsize=(7, 5))
