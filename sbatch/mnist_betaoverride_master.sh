@@ -1,11 +1,11 @@
 #!/bin/bash
 
-echo "Beginning k override sbatch scripts for MNIST"
+echo "Beginning beta override sbatch scripts for MNIST"
 
 # Iterate over k_override values from 0.1 to 2.0
 for beta in $(seq 0.1 0.1 1.0)
 do
-    echo "Submitting job with k_override = $k"
+    echo "Submitting job with beta = $beta"
     sbatch \
         --nodes=1 \
         --ntasks-per-node=1 \
