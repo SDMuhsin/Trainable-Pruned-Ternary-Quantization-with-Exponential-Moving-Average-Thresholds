@@ -337,6 +337,11 @@ class Experiment(ExperimentBase):
                     # Convolutions + FC layer
                     if (('conv' in name) or ('fc' in name)) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
+                elif self.model_to_use.lower() == 'mnistvit':
+                    if (('transformer_encoder' in name) and 
+                        (('weight' in name) or ('bias' in name)) and 
+                        ('patch_embed' not in name)):  # Only excluding patch embedding
+                        nb_params_to_quantize += nb_params_layer
                 else:
                     raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
 
@@ -361,6 +366,11 @@ class Experiment(ExperimentBase):
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
                 # Convolutions + FC layer
                 if (('conv' in n) or ('fc' in n)) and ('bias' not in n):
+                    nb_params_to_quantize += nb_params_layer
+            elif self.model_to_use.lower() == 'mnistvit':
+                if (('transformer_encoder' in name) and 
+                    (('weight' in name) or ('bias' in name)) and 
+                    ('patch_embed' not in name)):  # Only excluding patch embedding
                     nb_params_to_quantize += nb_params_layer
             else:
                 raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
@@ -523,7 +533,9 @@ def main():
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
-
+    elif (parameters_exp['model_type'].lower() == 'vit'):
+        if (parameters_exp['model_to_use'].lower() == 'mnistvit'):
+            shutil.copy2('./src/Models/Transformers/mnist_vit.py', resultsFolder + '/params_exp/network_architecture.py')
     elif (parameters_exp['model_type'].lower() == 'transformer'):
         if (parameters_exp['model_to_use'].lower() == 'rawaudiomultichannelcnn'):
             shutil.copy2('./src/Models/Transformers/Transformer_Encoder_RawAudioMultiChannelCNN.py', resultsFolder + '/params_exp/network_architecture.py')
