@@ -798,21 +798,7 @@ class Experiment(object):
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
-            elif (self.model_to_use.lower() in ['mnistvit']):
-                self.model = MnistVisionTransformer(
-                        self.parameters_exp['in_channels'],
-                        self.parameters_exp['nhead'],
-                        self.parameters_exp['d_hid'],
-                        self.parameters_exp['nlayers'],
-                        self.parameters_exp['dropout'],
-                        self.parameters_exp['nb_features_projection'],
-                        self.parameters_exp['d_model'],
-                        self.nb_classes,
-                        self.parameters_exp['classification_pool'],
-                        self.parameters_exp['n_conv_layers'],
-                        self.parameters_exp['pos_encoder_type']
 
-                ) 
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
 
@@ -839,6 +825,24 @@ class Experiment(object):
                                  dropout_probability=self.dropout_probability,
                                  input_shape=self.audio_feature_shape,
                                  num_classes=self.nb_classes)
+            else:
+                raise ValueError("Model to use {} is not valid".format(self.model_to_use))
+        elif (self.model_type.lower() == 'vit'):
+            if (self.model_to_use.lower() in ['mnistvit']):
+                self.model = MnistVisionTransformer(
+                        self.parameters_exp['in_channels'],
+                        self.parameters_exp['nhead'],
+                        self.parameters_exp['d_hid'],
+                        self.parameters_exp['nlayers'],
+                        self.parameters_exp['dropout'],
+                        self.parameters_exp['nb_features_projection'],
+                        self.parameters_exp['d_model'],
+                        10,
+                        self.parameters_exp['classification_pool'],
+                        self.parameters_exp['n_conv_layers'],
+                        self.parameters_exp['pos_encoder_type']
+
+                ) 
             else:
                 raise ValueError("Model to use {} is not valid".format(self.model_to_use))
 

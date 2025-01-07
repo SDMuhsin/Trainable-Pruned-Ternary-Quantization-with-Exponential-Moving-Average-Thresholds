@@ -17,5 +17,15 @@
     "separate_val_ds": false,
     "dataset_type": "MNIST",
     "percentage_samples_keep": 1,
-    "dataset_folder": "./data/MNIST/"
+    "dataset_folder": "./data/MNIST/",
+    "in_channels": 1,
+    "nhead": 8,
+    "d_hid": 384,
+    "nlayers": 6,
+    "dropout": 0.1,
+    "nb_features_projection": 64,
+    "d_model": 256,
+    "classification_pool": "cls",
+    "n_conv_layers": 1,
+    "pos_encoder_type" : "learned"
 }
