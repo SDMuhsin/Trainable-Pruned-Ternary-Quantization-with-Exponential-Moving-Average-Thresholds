@@ -53,7 +53,7 @@ from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init
 from src.Models.CNNs.resnet18 import ResNet18ClassificationModel
 from src.Models.CNNs.resnet50 import ResNet50ClassificationModel
 from src.Models.CNNs.resnet34 import ResNet34ClassificationModel
-
+from src.Models.Transformers.mnist_vit import VisionTransformer as MnistVisionTransformer 
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
@@ -798,6 +798,21 @@ class Experiment(object):
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
+            elif (self.model_to_use.lower() in ['mnistvit']):
+                self.model = MnistVisionTransformer(
+                        self.parameters_exp['in_channels'],
+                        self.parameters_exp['nhead'],
+                        self.parameters_exp['d_hid'],
+                        self.parameters_exp['nlayers'],
+                        self.parameters_exp['dropout'],
+                        self.parameters_exp['nb_features_projection'],
+                        self.parameters_exp['d_model'],
+                        self.nb_classes,
+                        self.parameters_exp['classification_pool'],
+                        self.parameters_exp['n_conv_layers'],
+                        self.parameters_exp['pos_encoder_type']
+
+                ) 
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
 
@@ -826,7 +841,6 @@ class Experiment(object):
                                  num_classes=self.nb_classes)
             else:
                 raise ValueError("Model to use {} is not valid".format(self.model_to_use))
-
 
         elif (self.model_type.lower() == 'transformer'):
             if (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -1333,6 +1347,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'mnistvit'):
+            shutil.copy2('./src/Models/Transformers/mnist_vit.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
         elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
