@@ -1346,7 +1346,7 @@ def main():
         pickle.dump(parameters_exp, fp)
 
     # Saving the python file containing the network architecture
-    if (parameters_exp['model_type'].lower() == '2dcnn'):
+    if (parameters_exp['model_type'].lower() in ['2dcnn','vit']):
         if (parameters_exp['model_to_use'].lower() == 'timefrequency2dcnn'):
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):

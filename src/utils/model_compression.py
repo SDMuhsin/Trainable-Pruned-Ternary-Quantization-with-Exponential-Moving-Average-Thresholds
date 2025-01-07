@@ -153,6 +153,32 @@ def get_params_groups_to_quantize(model, model_to_use):
                     'BNWeights': {'params': bn_weights},
                     'Biases': {'params': biases}
                  }
+
+    elif model_to_use.lower() in ['mnistvit']:
+        # Last FC layer (classification head)
+        weights_last_fc = [model.fc.weight]
+        
+        # Parameters to quantize
+        # All transformer layers (self-attention and feed-forward weights)
+        weights_to_be_quantized = [p for n, p in model.named_parameters() 
+                                  if ('transformer_encoder' in n) and ('weight' in n) and ('bias' not in n)]
+        names_params_to_be_quantized = [n for n, p in model.named_parameters() 
+                                       if ('transformer_encoder' in n) and ('weight' in n) and ('bias' not in n)]
+        
+        # Layer normalization weights in transformer layers
+        ln_weights = [p for n, p in model.named_parameters()
+                      if ('norm' in n) and ('weight' in n)]
+        
+        # All bias terms (including those in transformer layers, layer norm, and fc layers)
+        biases = [p for n, p in model.named_parameters()
+                  if 'bias' in n]
+        
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'LNWeights': {'params': ln_weights},  # Changed from BNWeights to LNWeights since ViT uses LayerNorm
+            'Biases': {'params': biases}
+        }
     elif (model_to_use.lower() in ['kmnistresnet18', 'emnistresnet18','fmnistresnet18','svhnresnet18']):
         # Last FC layer (for ResNet18, this is the final fc layer)
         weights_last_fc = [model.fc.weight]
