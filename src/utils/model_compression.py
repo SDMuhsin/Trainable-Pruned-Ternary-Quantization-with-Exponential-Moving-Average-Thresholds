@@ -158,25 +158,42 @@ def get_params_groups_to_quantize(model, model_to_use):
         # Last FC layer (classification head)
         weights_last_fc = [model.fc.weight]
         
-        # Parameters to quantize
-        # All transformer layers (self-attention and feed-forward weights)
+        # Parameters to quantize - explicitly exclude norm layers and only get weights
         weights_to_be_quantized = [p for n, p in model.named_parameters() 
-                                  if ('transformer_encoder' in n) and ('weight' in n) and ('bias' not in n)]
+                                  if ('transformer_encoder' in n) 
+                                  and ('norm' not in n)  # Exclude norm layers
+                                  and ('weight' in n) 
+                                  and ('bias' not in n)]
+        
         names_params_to_be_quantized = [n for n, p in model.named_parameters() 
-                                       if ('transformer_encoder' in n) and ('weight' in n) and ('bias' not in n)]
+                                       if ('transformer_encoder' in n) 
+                                       and ('norm' not in n)  # Exclude norm layers
+                                       and ('weight' in n) 
+                                       and ('bias' not in n)]
         
-        # Layer normalization weights in transformer layers
+        # Layer normalization weights - explicitly get only norm layer weights
         ln_weights = [p for n, p in model.named_parameters()
-                      if ('norm' in n) and ('weight' in n)]
+                      if ('transformer_encoder' in n)
+                      and ('norm' in n) 
+                      and ('weight' in n)]
         
-        # All bias terms (including those in transformer layers, layer norm, and fc layers)
+        # All bias terms - explicitly exclude those already included
         biases = [p for n, p in model.named_parameters()
-                  if 'bias' in n]
+                  if ('bias' in n)]
+        
+        # Verification step - ensure no parameter appears in multiple groups
+        all_params = set()
+        for group_params in [weights_last_fc, weights_to_be_quantized, ln_weights, biases]:
+            for param in group_params:
+                param_id = id(param)
+                if param_id in all_params:
+                    print(f"Duplicate parameter found: {param}")
+                all_params.add(param_id)
         
         params = {
             'LastFCLayer': {'params': weights_last_fc},
             'ToQuantize': {'params': weights_to_be_quantized},
-            'LNWeights': {'params': ln_weights},  # Changed from BNWeights to LNWeights since ViT uses LayerNorm
+            'LNWeights': {'params': ln_weights},
             'Biases': {'params': biases}
         }
     elif (model_to_use.lower() in ['kmnistresnet18', 'emnistresnet18','fmnistresnet18','svhnresnet18']):
