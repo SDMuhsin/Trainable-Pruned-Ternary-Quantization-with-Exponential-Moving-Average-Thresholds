@@ -21,6 +21,7 @@ import numpy as np
 from math import floor
 import matplotlib as mpl
 from datetime import datetime
+from collections import OrderedDict
 
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef
@@ -137,6 +138,73 @@ class Experiment(ExperimentBase):
 
     def load_weights_model(self):
         # Verifying if the model's weights file exists
+        if not os.path.exists(self.model_weights_file):
+            download_FP_models(model_to_use=self.model_to_use, dataset=self.dataset_type)
+
+        # Store initial weights for comparison
+        initial_weights = OrderedDict({name: param.clone().detach().cpu().numpy() 
+                                       for name, param in self.model.state_dict().items()})
+
+        # Loading the data of a model
+        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'))
+
+        # Sanity check: Ensure model_state_dict exists in model_data
+        if 'model_state_dict' not in model_data:
+            raise KeyError("model_state_dict not found in the loaded model data")
+
+        # Loading the weights into the model
+        self.model.load_state_dict(model_data['model_state_dict'])
+
+        # Sanity checks after loading
+        loaded_weights = OrderedDict({name: param.clone().detach().cpu().numpy() 
+                                      for name, param in self.model.state_dict().items()})
+        
+        # 1. Check if weights are different before and after loading
+        different_weights = 0
+        total_weights = 0
+        weight_diff_percentages = []
+
+        for name in initial_weights.keys():
+            if name in loaded_weights:
+                initial = initial_weights[name]
+                loaded = loaded_weights[name]
+                
+                if initial.shape != loaded.shape:
+                    print(f"Shape mismatch for {name}: Initial {initial.shape}, Loaded {loaded.shape}")
+                    continue
+                
+                diff = np.abs(initial - loaded)
+                diff_percentage = np.mean(diff != 0) * 100
+                weight_diff_percentages.append(diff_percentage)
+                
+                if not np.array_equal(initial, loaded):
+                    different_weights += 1
+                total_weights += 1
+
+        if total_weights > 0:
+            percent_different = (different_weights / total_weights) * 100
+            avg_diff_percentage = np.mean(weight_diff_percentages)
+            print(f"===> {percent_different:.2f}% of weights are different after loading")
+            print(f"===> On average, {avg_diff_percentage:.2f}% of values within each weight tensor changed")
+        else:
+            print("No weights found for comparison")
+
+        # 2. Verify that weights from model_data['model_state_dict'] have been loaded
+        for name, param in model_data['model_state_dict'].items():
+            if name not in loaded_weights:
+                print(f"Warning: {name} from loaded data not found in model")
+            elif not np.array_equal(param.cpu().numpy(), loaded_weights[name]):
+                print(f"Warning: {name} values do not match between loaded data and model")
+
+        if different_weights > 0:
+            print("===> Model loaded successfully with weight changes!")
+        else:
+            print("Warning: Model loaded, but no weight changes detected")
+
+        return different_weights > 0
+
+    def load_weights_model_original(self):
+        # Verifying if the model's weights file exists
         if not (os.path.exists(self.model_weights_file)):
             download_FP_models(model_to_use=self.model_to_use, dataset=self.dataset_type)
 
@@ -174,7 +242,7 @@ class Experiment(ExperimentBase):
             initial_scaling_factors += [(w_p_initial, w_n_initial)]
 
             # Doing quantization
-            k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial)
+            #k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial) # REVERT
 
         # Getting the optimizers for the FP kernels and the scaling factors
         # FP kernels
@@ -246,7 +314,7 @@ class Experiment(ExperimentBase):
             k_fp = fp_kernels[i]
             f = scaling_factors[i]
             w_p, w_n = f.data[0], f.data[1]
-            k.data = self.quantize(k_fp.data, w_p, w_n)
+            #k.data = self.quantize(k_fp.data, w_p, w_n) # REVERT
 
     def normalize_weights(self, per_channel_norm=True):
         """
@@ -365,7 +433,7 @@ class Experiment(ExperimentBase):
                     nb_params_to_quantize += nb_params_layer
             elif self.model_to_use.lower() == 'mnistvit':
                 # All transformer parameters except patch embedding
-                if 'transformer_encoder' in n:
+                if  ('transformer_encoder' in n ) and ('norm' not in n) and ('weight' in n) and ('bias' not in n):
                     nb_params_to_quantize += nb_params_layer
             else:
                 raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
