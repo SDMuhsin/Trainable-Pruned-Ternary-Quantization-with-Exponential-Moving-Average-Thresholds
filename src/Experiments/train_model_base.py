@@ -56,6 +56,7 @@ from src.Models.CNNs.resnet50 import ResNet50ClassificationModel
 from src.Models.CNNs.resnet34 import ResNet34ClassificationModel
 from src.Models.Transformers.mnist_vit import VisionTransformer as MnistVisionTransformer 
 from src.Models.CNNs.vocseg_unet import VocSegModel
+from src.Models.CNNs.fmnist_enet import create_efficientnet
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
@@ -925,6 +926,14 @@ class Experiment(object):
                 )
             else:
                 raise ValueError("Model to use {} is not valid".format(self.model_to_use))
+        elif (self.model_type.lower() in ['enet']):
+
+            if (self.model_to_use.lower() == 'fmnistenet'):
+
+                self.model = create_efficientnet('efficientnet-b0',10,1) 
+            else:
+                raise ValueError("Model to use {} is not valid".format(self.model_to_use))
+
 
         elif (self.model_type.lower() == 'transformer'):
             if (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -1497,7 +1506,11 @@ def main():
             shutil.copy2('./src/Models/CNNs/resnet34.py', resultsFolder + '/params_exp/network_architecture.py')            
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
-
+    elif (parameters_exp['model_type'].lower() == 'enet'):
+        if (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
+            shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')
+        else:
+            raise ValueError("Transformer type {} is not valid".format(parameters_exp['model_to_use']))
     elif (parameters_exp['model_type'].lower() == 'unet'):
         if (parameters_exp['model_to_use'].lower() == 'vocsegunet'):
             shutil.copy2('./src/Models/CNNs/vocseg_unet.py', resultsFolder + '/params_exp/network_architecture.py')
