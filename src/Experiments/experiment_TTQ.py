@@ -242,7 +242,7 @@ class Experiment(ExperimentBase):
             initial_scaling_factors += [(w_p_initial, w_n_initial)]
 
             # Doing quantization
-            #k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial) # REVERT
+            k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial) # REVERT
 
         # Getting the optimizers for the FP kernels and the scaling factors
         # FP kernels
@@ -314,7 +314,7 @@ class Experiment(ExperimentBase):
             k_fp = fp_kernels[i]
             f = scaling_factors[i]
             w_p, w_n = f.data[0], f.data[1]
-            #k.data = self.quantize(k_fp.data, w_p, w_n) # REVERT
+            k.data = self.quantize(k_fp.data, w_p, w_n) # REVERT
 
     def normalize_weights(self, per_channel_norm=True):
         """
