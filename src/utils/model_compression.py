@@ -163,7 +163,9 @@ def get_params_groups_to_quantize(model, model_to_use):
                                   if ('transformer_encoder' in n) 
                                   and ('norm' not in n)  # Exclude norm layers
                                   and ('weight' in n) 
-                                  and ('bias' not in n)]
+                                  and ('bias' not in n)
+                                  #and ('linear' not in n)                      # For testing purposes only
+                                  ]
         
         names_params_to_be_quantized = [n for n, p in model.named_parameters() 
                                        if ('transformer_encoder' in n) 
@@ -172,6 +174,10 @@ def get_params_groups_to_quantize(model, model_to_use):
                                        and ('bias' not in n)]
         
         # Layer normalization weights - explicitly get only norm layer weights
+
+        for n,p in model.named_parameters():
+            print(f"Named PARAM : ", n)
+
         ln_weights = [p for n, p in model.named_parameters()
                       if ('transformer_encoder' in n)
                       and ('norm' in n) 
@@ -196,6 +202,7 @@ def get_params_groups_to_quantize(model, model_to_use):
             'LNWeights': {'params': ln_weights},
             'Biases': {'params': biases}
         }
+        #params = {} # REVERT
     elif (model_to_use.lower() in ['kmnistresnet18', 'emnistresnet18','fmnistresnet18','svhnresnet18']):
         # Last FC layer (for ResNet18, this is the final fc layer)
         weights_last_fc = [model.fc.weight]
