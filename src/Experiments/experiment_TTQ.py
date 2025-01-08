@@ -143,7 +143,7 @@ class Experiment(ExperimentBase):
         # Loading the data of a model
         model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'))
 
-        # Loading the weights into the model
+        ## Loading the weights into the model
         self.model.load_state_dict(model_data['model_state_dict'])
         print("===> Model loaded successfully !")
 
@@ -309,7 +309,6 @@ class Experiment(ExperimentBase):
     def countNonZeroWeights(self, model, quantizedLayers=False):
         """
             Count the number of non zero parameters in the model
-
             Arguments:
             ----------
             model: torch model
@@ -338,13 +337,11 @@ class Experiment(ExperimentBase):
                     if (('conv' in name) or ('fc' in name)) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
                 elif self.model_to_use.lower() == 'mnistvit':
-                    if (('transformer_encoder' in name) and 
-                        (('weight' in name) or ('bias' in name)) and 
-                        ('patch_embed' not in name)):  # Only excluding patch embedding
-                        nb_params_to_quantize += nb_params_layer
+                    # All transformer parameters except patch embedding
+                    if ('transformer_encoder' in name):
+                        nonzero += torch.count_nonzero(param)
                 else:
                     raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
-
         return nonzero
 
     def get_nb_params_to_quantize(self):
@@ -355,7 +352,6 @@ class Experiment(ExperimentBase):
             nb_params_layer = 1
             for val in p.shape:
                 nb_params_layer *= val
-
             # Nb params quantize
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50']):
                 if ('conv' in n) and ('bias' not in n):
@@ -368,16 +364,13 @@ class Experiment(ExperimentBase):
                 if (('conv' in n) or ('fc' in n)) and ('bias' not in n):
                     nb_params_to_quantize += nb_params_layer
             elif self.model_to_use.lower() == 'mnistvit':
-                if (('transformer_encoder' in name) and 
-                    (('weight' in name) or ('bias' in name)) and 
-                    ('patch_embed' not in name)):  # Only excluding patch embedding
+                # All transformer parameters except patch embedding
+                if 'transformer_encoder' in n:
                     nb_params_to_quantize += nb_params_layer
             else:
                 raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
-
             # Nb tot params
             nb_total_params += nb_params_layer
-
         return nb_total_params, nb_params_to_quantize
 
 

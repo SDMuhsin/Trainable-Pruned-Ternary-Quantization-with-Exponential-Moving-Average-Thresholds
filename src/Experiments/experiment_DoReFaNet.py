@@ -148,11 +148,12 @@ class Experiment(ExperimentBase):
         # Kernels to be quantized
         kernels_to_quantize = [kernel for kernel in model_params_dict['ToQuantize']['params']]
 
+
+
         # Initial Quantization
         for k, k_fp in zip(kernels_to_quantize, kernels_to_quantize_fp_copy):
             # Doing quantization
             k.data = self.quantize(k_fp.data)
-
         # Getting the optimizers for the FP kernels and the scaling factors
         # FP kernels
         self.optimizer_fp = torch.optim.Adamax(kernels_to_quantize_fp_copy, lr=self.lr)
