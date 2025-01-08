@@ -48,12 +48,14 @@ from src.DataManipulation.emnist_data import put_EMNIST_data_generic_form, EMNIS
 from src.DataManipulation.cifar10_data import put_CIFAR10_data_generic_form, CIFAR10DatasetWrapper
 from src.DataManipulation.cifar100_data import put_CIFAR100_data_generic_form, CIFAR100DatasetWrapper
 from src.DataManipulation.stl10_data import put_STL10_data_generic_form, STL10DatasetWrapper
+from src.DataManipulation.vocseg_data import put_PascalVOC_data_generic_form, PascalVOCDatasetWrapper
 
 from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init 
 from src.Models.CNNs.resnet18 import ResNet18ClassificationModel
 from src.Models.CNNs.resnet50 import ResNet50ClassificationModel
 from src.Models.CNNs.resnet34 import ResNet34ClassificationModel
 from src.Models.Transformers.mnist_vit import VisionTransformer as MnistVisionTransformer 
+from src.Models.CNNs.vocseg_unet import VocSegModel
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
@@ -262,6 +264,75 @@ class Experiment(object):
                                                 add_channel_dim=self.add_channel_dim,
                                                 params=self.parameters_exp
                                              )
+
+        # For the elif block in your main code:
+        elif (self.dataset_type.lower() == 'pascal_voc'):
+            # Transformations to apply to the dataset
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+            ])
+            
+            # Target transform for the segmentation masks
+            target_transform = torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+            ])
+            
+            # Retrieving the training dataset
+            self.training_data = torchvision.datasets.VOCSegmentation(
+                root=parameters_exp['dataset_folder'],
+                year='2012',  # You can change this to '2007' if needed
+                image_set='train',
+                transform=transform,
+                target_transform=target_transform,
+                download=True
+            )
+            
+            # Keeping only a percentage of samples
+            print("Original number of training samples (Pascal VOC): {}".format(len(self.training_data)))
+            nb_samples_keep = int(self.percentage_samples_keep*len(self.training_data))
+            self.training_data = [self.training_data[i] for i in range(len(self.training_data)) if i < nb_samples_keep]
+            print('New number of training samples (Pascal VOC): {}'.format(len(self.training_data)))
+            
+            # Putting the dataset under the right format
+            self.training_data = put_PascalVOC_data_generic_form(self.training_data)
+            
+            # Splitting the train data into train and validation
+            if (self.separate_val_ds):
+                train_val_splits = train_val_split_stratified(self.training_data, n_splits=1, test_size=0.2)[0]
+                self.training_data, self.val_data = train_val_splits['Train'], train_val_splits['Validation']
+            
+            # Retrieving the test dataset
+            self.testing_data = torchvision.datasets.VOCSegmentation(
+                root=parameters_exp['dataset_folder'],
+                year='2012',  # You can change this to '2007' if needed
+                image_set='val',  # Pascal VOC uses 'val' as test set
+                transform=transform,
+                target_transform=target_transform,
+                download=True
+            )
+            
+            self.testing_data = put_PascalVOC_data_generic_form(self.testing_data)
+            
+            # Balance training dataset
+            # Note: For segmentation tasks, balancing might need to be done differently
+            # as each image can contain multiple classes
+            if (self.balance_dataset):
+                self.training_data, nb_samples_per_class = balance_dataset(
+                    self.training_data, 
+                    dataset_type=self.dataset_type, 
+                    balance_strategy=self.balance_strategy
+                )
+                print("\nAFTER RESAMPLING we have {} training samples. Number of samples per class: {}".format(
+                    len(self.training_data), 
+                    nb_samples_per_class
+                ))
+            
+            # Creating the pytorch datasets
+            self.train_ds = PascalVOCDatasetWrapper(data=self.training_data)
+            if (self.separate_val_ds):
+                self.val_ds = PascalVOCDatasetWrapper(data=self.val_data)
+            self.test_ds = PascalVOCDatasetWrapper(data=self.testing_data)
+
         elif (self.dataset_type.lower() == 'mnist'):
             # Transformations to apply to the dataset
             transform = torchvision.transforms.Compose(
@@ -798,7 +869,6 @@ class Experiment(object):
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
-
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
 
@@ -843,6 +913,16 @@ class Experiment(object):
                         self.parameters_exp['pos_encoder_type']
 
                 ) 
+            else:
+                raise ValueError("Model to use {} is not valid".format(self.model_to_use))
+        elif (self.model_type.lower() in ['unet']):
+
+            if (self.model_to_use.lower() == 'vocsegunet'):
+
+                self.model = VocSegModel(
+                        self.parameters_exp['in_channels'],
+                        21 
+                )
             else:
                 raise ValueError("Model to use {} is not valid".format(self.model_to_use))
 
@@ -1418,6 +1498,12 @@ def main():
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
 
+    elif (parameters_exp['model_type'].lower() == 'unet'):
+        if (parameters_exp['model_to_use'].lower() == 'vocsegunet'):
+            shutil.copy2('./src/Models/CNNs/vocseg_unet.py', resultsFolder + '/params_exp/network_architecture.py')
+        else:
+            raise ValueError("Transformer type {} is not valid".format(parameters_exp['model_to_use']))
+        
     elif (parameters_exp['model_type'].lower() == 'transformer'):
         if (parameters_exp['model_to_use'].lower() == 'rawaudiomultichannelcnn'):
             shutil.copy2('./src/Models/Transformers/Transformer_Encoder_RawAudioMultiChannelCNN.py', resultsFolder + '/params_exp/network_architecture.py')
