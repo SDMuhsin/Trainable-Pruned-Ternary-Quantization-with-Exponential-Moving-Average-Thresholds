@@ -964,8 +964,62 @@ class Experiment(object):
 
         # Update the parameters
         self.optimizer.step()
-
     def normalize_weights(self, per_channel_norm=True):
+        """
+        Normalize the weights of the model:
+          - For CNN models, do the original approach (conv layers get per-channel normalization if per_channel_norm=True, everything else layer-level).
+          - For ViT models, *only* normalize the patch-embedding convolution (and optionally the final classification layer). 
+            Skip normalizing the transformer layers, positional embeddings, CLS token, etc., because that typically 
+            breaks the pre-trained scale distribution in attention/MLP layers.
+        """
+        with torch.no_grad():
+            # Branch based on the model type
+            if self.model_type.lower() == 'vit':
+                for name, param in self.model.named_parameters():
+                    # Skip biases entirely
+                    if 'bias' in name:
+                        continue
+
+                    # 1) Patch embedding is a Conv2d in self.patch_embed.projection
+                    if 'patch_embed.projection.weight' in name:
+                        if per_channel_norm:
+                            for conv_filter_idx in range(param.shape[0]):
+                                param.data[conv_filter_idx] = (
+                                    param.data[conv_filter_idx] / param.data[conv_filter_idx].abs().max()
+                                )
+                        else:
+                            param.data = param.data / param.data.abs().max()
+
+                    # 2) (Optional) You could also normalize the final classifier layer:
+                    elif 'fc.weight' in name:
+                        param.data = param.data / param.data.abs().max()
+
+                    # 3) Everything else in the Transformer (e.g. "transformer_encoder.*", 
+                    #    "pos_encoder.*", "cls_token", etc.) -- do NOT normalize
+                    else:
+                        pass  # do nothing
+
+            else:
+                # For CNN (or other model_type), do your original approach
+                for name, param in self.model.named_parameters():
+                    # Skip biases
+                    if 'bias' in name:
+                        continue
+
+                    # Per‐channel normalization for convolution layers
+                    if 'conv' in name:
+                        if per_channel_norm:
+                            for conv_filter_idx in range(param.shape[0]):
+                                param.data[conv_filter_idx] = (
+                                    param.data[conv_filter_idx] / param.data[conv_filter_idx].abs().max()
+                                )
+                        else:
+                            param.data = param.data / param.data.abs().max()
+
+                    # Single scale for everything else
+                    else:
+                        param.data = param.data / param.data.abs().max()
+    def normalize_weights_original(self, per_channel_norm=True):
         """
             Normalize the weights of a model.
             Convolutions are normalized PER CHANNEL.
