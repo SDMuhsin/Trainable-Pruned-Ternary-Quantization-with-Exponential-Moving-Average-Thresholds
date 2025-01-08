@@ -229,6 +229,41 @@ def get_params_groups_to_quantize(model, model_to_use):
             'Biases': {'params': biases}
         }
 
+    elif (model_to_use.lower() in ['fmnistenet']):
+        # Last FC layer
+        weights_last_fc = [model.fc.weight]
+
+        # All convolution layers (including conv_stem, conv_head, and those in MBConvBlocks)
+        weights_to_be_quantized = [
+            p for n, p in model.named_parameters()
+            if ('conv' in n) and ('bias' not in n)
+        ]
+        names_params_to_be_quantized = [
+            n for n, p in model.named_parameters()
+            if ('conv' in n) and ('bias' not in n)
+        ]
+
+        # Parameters of batch_norm layers (including conv_stem, conv_head, and MBConvBlocks)
+        bn_weights = [
+            p for n, p in model.named_parameters()
+            if (('bn' in n) or ('batch_norm' in n)) and ('weight' in n)
+        ]
+
+        # All bias terms
+        biases = [
+            p for n, p in model.named_parameters()
+            if 'bias' in n
+        ]
+
+        # Group parameters into a dictionary for easy reference/optimization
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'BNWeights': {'params': bn_weights},
+            'Biases': {'params': biases}
+        }
+
+
     elif (model_to_use.lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
         # Last FC layer
         weights_last_fc = [model.fc.weight]

@@ -884,7 +884,8 @@ class Experiment(object):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
             elif (self.model_to_use.lower() in ['cifar100resnet34']):
                 self.model = ResNet34ClassificationModel(input_channels=3,nb_classes=100)
-             
+            elif (self.model_to_use.lower() == 'fmnistenet'):
+                self.model = create_efficientnet('efficientnet-b0',10,1)              
             elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
                 self.nb_init_filters = self.parameters_exp['nb_init_filters']
                 self.increase_nb_filters_mode = self.parameters_exp['increase_nb_filters_mode']
@@ -926,15 +927,6 @@ class Experiment(object):
                 )
             else:
                 raise ValueError("Model to use {} is not valid".format(self.model_to_use))
-        elif (self.model_type.lower() in ['enet']):
-
-            if (self.model_to_use.lower() == 'fmnistenet'):
-
-                self.model = create_efficientnet('efficientnet-b0',10,1) 
-            else:
-                raise ValueError("Model to use {} is not valid".format(self.model_to_use))
-
-
         elif (self.model_type.lower() == 'transformer'):
             if (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
                 print("=======> USING RAWAUDIOMULTICHANNELCNN TRANSFORMER\n")
@@ -1503,14 +1495,11 @@ def main():
         elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['cifar100resnet34']):
-            shutil.copy2('./src/Models/CNNs/resnet34.py', resultsFolder + '/params_exp/network_architecture.py')            
-        else:
-            raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
-    elif (parameters_exp['model_type'].lower() == 'enet'):
-        if (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
+            shutil.copy2('./src/Models/CNNs/resnet34.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
             shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
-            raise ValueError("Transformer type {} is not valid".format(parameters_exp['model_to_use']))
+            raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
     elif (parameters_exp['model_type'].lower() == 'unet'):
         if (parameters_exp['model_to_use'].lower() == 'vocsegunet'):
             shutil.copy2('./src/Models/CNNs/vocseg_unet.py', resultsFolder + '/params_exp/network_architecture.py')
