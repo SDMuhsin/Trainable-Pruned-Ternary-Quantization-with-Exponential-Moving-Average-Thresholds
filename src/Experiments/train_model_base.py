@@ -266,7 +266,7 @@ class Experiment(object):
                                              )
 
         # For the elif block in your main code:
-        elif (self.dataset_type.lower() == 'pascal_voc'):
+        elif (self.dataset_type.lower() == 'vocseg'):
             # Transformations to apply to the dataset
             transform = torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),

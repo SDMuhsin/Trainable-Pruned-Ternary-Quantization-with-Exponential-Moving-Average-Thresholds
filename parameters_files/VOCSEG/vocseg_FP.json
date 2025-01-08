@@ -1,0 +1,21 @@
+{
+    "exp_id": "CameraReady_VOCSEG_UNET_FP",
+    "lr": 0.001,
+    "nb_repetitions": 1,
+    "batch_size_train": 32,
+    "batch_size_test": 32,
+    "weight_decay": 0,
+    "nb_epochs": 10,
+    "loss_function": "CE",
+    "model_type": "UNET",
+    "model_to_use": "VocSegUnet",
+    "do_normalization_weights": false,
+    "device": "cuda",
+    "use_soft_labels": false,
+    "balance_dataset": false,
+    "compute_class_weights": false,
+    "separate_val_ds": false,
+    "dataset_type": "VOCSEG",
+    "percentage_samples_keep": 1,
+    "dataset_folder": "./data/VOCSEG/"
+}
