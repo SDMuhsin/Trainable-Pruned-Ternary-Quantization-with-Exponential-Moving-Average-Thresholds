@@ -58,7 +58,7 @@ from src.Models.Transformers.mnist_vit import VisionTransformer as MnistVisionTr
 from src.Models.CNNs.vocseg_unet import VocSegModel
 from src.Models.CNNs.fmnist_enet import create_efficientnet
 from src.Models.CNNs.densenet import DenseNetClassificationModel
-
+from src.Models.CNNs.inceptionv4 import InceptionV4ClassificationModel
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
 
@@ -883,6 +883,8 @@ class Experiment(object):
                 self.model = ResNet18ClassificationModel(input_channels=3,nb_classes=10)
             elif (self.model_to_use.lower() in ['cifar10resnet50','stl10resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=10)
+            elif (self.model_to_use.lower() in ['stl10inceptionv4']):
+                self.model = InceptionV4ClassificationModel(input_channels=3,nb_classes=10)
             elif (self.model_to_use.lower() in ['cifar100resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
             elif (self.model_to_use.lower() in ['cifar100resnet34']):
@@ -1497,6 +1499,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() in ['stl10inceptionv4']):
+            shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['cifar100resnet34']):
             shutil.copy2('./src/Models/CNNs/resnet34.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
