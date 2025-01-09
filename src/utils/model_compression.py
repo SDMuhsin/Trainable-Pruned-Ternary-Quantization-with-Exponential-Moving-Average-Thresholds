@@ -228,6 +228,38 @@ def get_params_groups_to_quantize(model, model_to_use):
             'BNWeights': {'params': bn_weights},
             'Biases': {'params': biases}
         }
+    elif (model_to_use.lower() in ['kmnistdensenet', 'emnistdensenet', 'fmnistdensenet', 'svhndensenet']):
+        # Last FC layer (for DenseNet, it's the "classifier" attribute in the model)
+        weights_last_fc = [model.classifier.weight]
+
+        # Parameters to quantize: all convolution layers, but not their bias terms
+        weights_to_be_quantized = [
+            p for n, p in model.named_parameters()
+            if ('conv' in n) and ('bias' not in n)
+        ]
+        names_params_to_be_quantized = [
+            n for n, p in model.named_parameters()
+            if ('conv' in n) and ('bias' not in n)
+        ]
+
+        # BatchNorm weights (including those in DenseBlocks, transitions, etc.)
+        bn_weights = [
+            p for n, p in model.named_parameters()
+            if (('bn' in n) or ('batch_norm' in n)) and ('weight' in n)
+        ]
+
+        # All bias terms (conv, bn, classifier, etc.)
+        biases = [
+            p for n, p in model.named_parameters()
+            if 'bias' in n
+        ]
+
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'BNWeights': {'params': bn_weights},
+            'Biases': {'params': biases},
+        }
 
     elif (model_to_use.lower() in ['fmnistenet']):
         # Last FC layer

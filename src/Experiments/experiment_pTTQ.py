@@ -639,7 +639,9 @@ def main():
             elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
                 shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
-                shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')                
+                shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')               
+            elif (parameters_exp['model_to_use'].lower() == 'kmnistdensenet'):
+                shutil.copy2('./src/Models/CNNs/densenet.py', resultsFolder + '/params_exp/network_architecture.py')
             else:
                 raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
         elif (parameters_exp['model_type'].lower() == 'vit'):

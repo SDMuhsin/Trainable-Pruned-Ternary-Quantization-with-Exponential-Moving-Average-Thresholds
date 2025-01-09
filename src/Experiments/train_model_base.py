@@ -57,6 +57,7 @@ from src.Models.CNNs.resnet34 import ResNet34ClassificationModel
 from src.Models.Transformers.mnist_vit import VisionTransformer as MnistVisionTransformer 
 from src.Models.CNNs.vocseg_unet import VocSegModel
 from src.Models.CNNs.fmnist_enet import create_efficientnet
+from src.Models.CNNs.densenet import DenseNetClassificationModel
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
@@ -870,6 +871,8 @@ class Experiment(object):
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
+            elif (self.model_to_use.lower() in ['kmnistdensenet']):
+                self.model = DenseNetClassificationModel(input_channels=1,nb_classes=10)
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
 
@@ -1498,6 +1501,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/resnet34.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
             shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'kmnistdensenet'):
+            shutil.copy2('./src/Models/CNNs/densenet.py', resultsFolder + '/params_exp/network_architecture.py')
         else:
             raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
     elif (parameters_exp['model_type'].lower() == 'unet'):
