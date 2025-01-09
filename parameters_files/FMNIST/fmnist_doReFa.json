@@ -1,5 +1,5 @@
 {
-    "exp_id": "CameraReady_FMNIST_RESNET18_DoReFa",
+    "exp_id": "CameraReady_FMNIST_ENET_DoReFa",
     "lr": 0.001,
     "nb_repetitions": 10,
     "batch_size_train": 32,
@@ -7,9 +7,9 @@
     "weight_decay": 0,
     "nb_epochs": 50,
     "loss_function": "CE",
-    "trained_fp_models_folder": "./results/CameraReady_FMNIST_RESNET18_FP_OW_0/model/",
+    "trained_fp_models_folder": "./results/CameraReady_FMNIST_ENET_FP_OW_0/model/",
     "model_type": "2DCNN",
-    "model_to_use": "fmnistresnet18",
+    "model_to_use": "fmnistenet",
     "do_normalization_weights": false,
     "device": "cuda",
     "balance_dataset": false,

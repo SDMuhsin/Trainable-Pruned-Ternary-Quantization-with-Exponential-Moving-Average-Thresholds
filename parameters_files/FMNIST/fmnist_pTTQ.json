@@ -1,5 +1,5 @@
 {
-    "exp_id": "CameraReady_FMNIST_RESNET18_pTTQ",
+    "exp_id": "CameraReady_FMNIST_ENET_pTTQ",
     "lr": 5e-06,
     "lr_wn_wp": 5e-06,
     "lr_thresh": 5e-06,
@@ -15,9 +15,9 @@
     "init_x": 1.0,
     "init_y": 1.0,
     "optimize_alpha": false,
-    "trained_fp_models_folder": "./results/CameraReady_FMNIST_RESNET18_FP_OW_0/model/",
+    "trained_fp_models_folder": "./results/CameraReady_FMNIST_ENET_FP_OW_0/model/",
     "model_type": "2DCNN",
-    "model_to_use": "fmnistresnet18",
+    "model_to_use": "fmnistenet",
     "do_normalization_weights": false,
     "device": "cuda",
     "balance_dataset": false,
