@@ -1,11 +1,11 @@
 {
     "exp_id": "CameraReady_KMNIST_DENSENET_DoReFa",
     "lr": 0.001,
-    "nb_repetitions": 1,
+    "nb_repetitions": 10,
     "batch_size_train": 32,
     "batch_size_test": 32,
     "weight_decay": 0,
-    "nb_epochs": 1,
+    "nb_epochs": 50,
     "loss_function": "CE",
     "trained_fp_models_folder": "./results/CameraReady_KMNIST_DENSENET_FP_OW_0/model/",
     "model_type": "2DCNN",
