@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
     This code computes the energy consumption of different models based on
@@ -329,6 +330,362 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
         #input_shape = model.fc1(output_encoder.view(-1, 320)).shape # If the input size is (28, 28, 1)
         input_shape = model.fc1(output_encoder.view(-1, 80)).shape # If the input size is (20, 20, 1)
         mult_adds += count_mult_adds_layer_without_zero_ops(model.fc2, input_shape)
+
+    elif (model_to_use.lower() == 'kmnistdensenet'):
+
+        # ---------------------------
+        # 1) Initial layers
+        # ---------------------------
+        # model.encoder.features is a nn.Sequential that starts with:
+        #   [0] = Conv2d(...)
+        #   [1] = BatchNorm2d(...)
+        #   [2] = ReLU(...)
+        #   [3] = MaxPool2d(...)
+        #
+        # Then come the DenseBlocks, possibly interleaved with Transitions,
+        # and finally the last BN (named "final_bn").
+        
+        # We'll walk through them step by step (manually) to mimic the ResNet flow.
+        
+        # Initial convolution
+        conv0 = model.encoder.features[0]  # Conv2d
+        mult_adds += count_mult_adds_layer_without_zero_ops(conv0, input_shape)
+        x = conv0(random_input_tensor)
+        x = model.encoder.features[1](x)  # BN
+        x = model.encoder.features[2](x)  # ReLU
+        x = model.encoder.features[3](x)  # MaxPool
+        input_shape = x.shape
+        
+        # ---------------------------
+        # 2) Dense Blocks + Transitions
+        # ---------------------------
+        # The structure (for a standard DenseNet-121 style) is:
+        #   [4] = denseblock1
+        #   [5] = transition1
+        #   [6] = denseblock2
+        #   [7] = transition2
+        #   [8] = denseblock3
+        #   [9] = transition3
+        #   [10] = denseblock4
+        #   [11] = final_bn
+        #
+        # Each DenseBlock is itself a nn.Sequential of _DenseLayer modules.
+        # Each _DenseLayer has conv1 -> conv2 internally (plus BN/ReLU).
+        #
+        # We will manually unroll each block and transition here.
+        
+        # ---- DenseBlock1 ----
+        denseblock1 = model.encoder.features[4]
+        for layer in denseblock1.block:
+            # layer is a _DenseLayer with:
+            #   layer.conv1, layer.conv2
+            # plus BN/ReLU in between.  
+            
+            # conv1
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv1, input_shape)
+            out = layer.conv1(layer.relu1(layer.bn1(x)))
+            # conv2
+            # Note that shape changes after out, so we track it step by step
+            out_shape = out.shape
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv2, out_shape)
+            out = layer.conv2(layer.relu2(layer.bn2(out)))
+            
+            # DenseNet concatenates (x, out) along channel dimension
+            x = torch.cat([x, out], 1)
+            input_shape = x.shape  # updated shape after concatenation
+        
+        # ---- Transition1 ----
+        transition1 = model.encoder.features[5]
+        # transition1 has a conv and a pool
+        mult_adds += count_mult_adds_layer_without_zero_ops(transition1.conv, input_shape)
+        x = transition1.conv(transition1.relu(transition1.bn(x)))
+        x = transition1.pool(x)
+        input_shape = x.shape
+        
+        # ---- DenseBlock2 ----
+        denseblock2 = model.encoder.features[6]
+        for layer in denseblock2.block:
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv1, input_shape)
+            out = layer.conv1(layer.relu1(layer.bn1(x)))
+            out_shape = out.shape
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv2, out_shape)
+            out = layer.conv2(layer.relu2(layer.bn2(out)))
+            x = torch.cat([x, out], 1)
+            input_shape = x.shape
+        
+        # ---- Transition2 ----
+        transition2 = model.encoder.features[7]
+        mult_adds += count_mult_adds_layer_without_zero_ops(transition2.conv, input_shape)
+        x = transition2.conv(transition2.relu(transition2.bn(x)))
+        x = transition2.pool(x)
+        input_shape = x.shape
+        
+        # ---- DenseBlock3 ----
+        denseblock3 = model.encoder.features[8]
+        for layer in denseblock3.block:
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv1, input_shape)
+            out = layer.conv1(layer.relu1(layer.bn1(x)))
+            out_shape = out.shape
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv2, out_shape)
+            out = layer.conv2(layer.relu2(layer.bn2(out)))
+            x = torch.cat([x, out], 1)
+            input_shape = x.shape
+        
+        # ---- Transition3 ----
+        transition3 = model.encoder.features[9]
+        mult_adds += count_mult_adds_layer_without_zero_ops(transition3.conv, input_shape)
+        x = transition3.conv(transition3.relu(transition3.bn(x)))
+        x = transition3.pool(x)
+        input_shape = x.shape
+        
+        # ---- DenseBlock4 ----
+        denseblock4 = model.encoder.features[10]
+        for layer in denseblock4.block:
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv1, input_shape)
+            out = layer.conv1(layer.relu1(layer.bn1(x)))
+            out_shape = out.shape
+            mult_adds += count_mult_adds_layer_without_zero_ops(layer.conv2, out_shape)
+            out = layer.conv2(layer.relu2(layer.bn2(out)))
+            x = torch.cat([x, out], 1)
+            input_shape = x.shape
+        
+        # ---- Final BN ----
+        final_bn = model.encoder.features[11]
+        # Typically we don't count BN, but if you want to, you can do something like:
+        # mult_adds += count_mult_adds_layer_without_zero_ops(final_bn, input_shape)
+        x = final_bn(x)
+        input_shape = x.shape
+        
+        # ---------------------------
+        # 3) Final classifier
+        # ---------------------------
+        # In your DenseNet code, after the encoder, you do:
+        #    x = F.relu(x)
+        #    x = F.adaptive_avg_pool2d(x, (1, 1))
+        #    x = torch.flatten(x, 1)
+        #    x = self.classifier(x)
+        #
+        # We'll replicate that for shape tracking and mult-add counting:
+        
+        x = F.relu(x, inplace=True)
+        x = F.adaptive_avg_pool2d(x, (1, 1))
+        x = torch.flatten(x, 1)
+        input_shape = x.shape
+        
+        # Finally, count the classifier (a Linear layer)
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.classifier, input_shape)
+
+        # Done with DenseNet flow
+
+    elif (model_to_use.lower() == 'fmnistinceptionv4'):
+        # --------------------------------------------------------------------------
+        #  InceptionV4ClassificationModel
+        #  model.encoder -> InceptionV4Encoder -> (stem -> inception_a -> reduction_a
+        #                                          -> inception_b -> reduction_b
+        #                                          -> inception_c)
+        #  Then model.avgpool -> flatten -> model.fc
+        # --------------------------------------------------------------------------
+
+        # Pass input through stem (a nn.Sequential of BasicConv2d layers)
+        x = random_input_tensor
+        for stem_layer in model.encoder.stem:
+            # stem_layer is a BasicConv2d => stem_layer.conv is the Conv2d
+            mult_adds += count_mult_adds_layer_without_zero_ops(stem_layer.conv, x.shape)
+            x = stem_layer(x)
+        input_shape = x.shape
+
+        # ------------------------------
+        # Inception A (3 blocks)
+        # Each block is an InceptionA module with 4 branches:
+        #   branch1x1
+        #   branch3x3_1 -> branch3x3_2
+        #   branch3x3dbl_1 -> branch3x3dbl_2 -> branch3x3dbl_3
+        #   branch_pool (with F.avg_pool2d before)
+        # ------------------------------
+        for block in model.encoder.inception_a:
+            # Branch 1x1
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch1x1.conv, x.shape)
+            branch1x1 = block.branch1x1(x)
+
+            # Branch 3x3
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_1.conv, x.shape)
+            branch3x3 = block.branch3x3_1(x)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_2.conv, branch3x3.shape)
+            branch3x3 = block.branch3x3_2(branch3x3)
+
+            # Branch 3x3 double
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_1.conv, x.shape)
+            branch3x3dbl = block.branch3x3dbl_1(x)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_2.conv, branch3x3dbl.shape)
+            branch3x3dbl = block.branch3x3dbl_2(branch3x3dbl)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_3.conv, branch3x3dbl.shape)
+            branch3x3dbl = block.branch3x3dbl_3(branch3x3dbl)
+
+            # Branch pool
+            pool_input = F.avg_pool2d(x, kernel_size=3, stride=1, padding=1)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch_pool.conv, pool_input.shape)
+            branch_pool = block.branch_pool(pool_input)
+
+            # Concatenate
+            x = torch.cat([branch1x1, branch3x3, branch3x3dbl, branch_pool], dim=1)
+            input_shape = x.shape
+
+        # ------------------------------
+        # Reduction A (1 block)
+        #   branch3x3
+        #   branch3x3dbl_1 -> branch3x3dbl_2 -> branch3x3dbl_3
+        #   branch_pool (with F.max_pool2d)
+        # ------------------------------
+        block = model.encoder.reduction_a
+        # Branch 3x3
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3.conv, x.shape)
+        branch3x3 = block.branch3x3(x)
+
+        # Branch 3x3 double
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_1.conv, x.shape)
+        branch3x3dbl = block.branch3x3dbl_1(x)
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_2.conv, branch3x3dbl.shape)
+        branch3x3dbl = block.branch3x3dbl_2(branch3x3dbl)
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_3.conv, branch3x3dbl.shape)
+        branch3x3dbl = block.branch3x3dbl_3(branch3x3dbl)
+
+        # Branch pool
+        branch_pool = F.max_pool2d(x, kernel_size=3, stride=2)
+
+        # Concatenate
+        x = torch.cat([branch3x3, branch3x3dbl, branch_pool], dim=1)
+        input_shape = x.shape
+
+        # ------------------------------
+        # Inception B (3 blocks)
+        # Each block is an InceptionB with 4 branches:
+        #   branch1x1
+        #   branch7x7_1 -> branch7x7_2 -> branch7x7_3
+        #   branch7x7dbl_1 -> branch7x7dbl_2 -> branch7x7dbl_3
+        #                   -> branch7x7dbl_4 -> branch7x7dbl_5
+        #   branch_pool (with F.avg_pool2d before)
+        # ------------------------------
+        for block in model.encoder.inception_b:
+            # Branch 1x1
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch1x1.conv, x.shape)
+            branch1x1 = block.branch1x1(x)
+
+            # Branch 7x7
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_1.conv, x.shape)
+            branch7x7 = block.branch7x7_1(x)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_2.conv, branch7x7.shape)
+            branch7x7 = block.branch7x7_2(branch7x7)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_3.conv, branch7x7.shape)
+            branch7x7 = block.branch7x7_3(branch7x7)
+
+            # Branch 7x7 double
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7dbl_1.conv, x.shape)
+            branch7x7dbl = block.branch7x7dbl_1(x)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7dbl_2.conv, branch7x7dbl.shape)
+            branch7x7dbl = block.branch7x7dbl_2(branch7x7dbl)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7dbl_3.conv, branch7x7dbl.shape)
+            branch7x7dbl = block.branch7x7dbl_3(branch7x7dbl)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7dbl_4.conv, branch7x7dbl.shape)
+            branch7x7dbl = block.branch7x7dbl_4(branch7x7dbl)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7dbl_5.conv, branch7x7dbl.shape)
+            branch7x7dbl = block.branch7x7dbl_5(branch7x7dbl)
+
+            # Branch pool
+            pool_input = F.avg_pool2d(x, kernel_size=3, stride=1, padding=1)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch_pool.conv, pool_input.shape)
+            branch_pool = block.branch_pool(pool_input)
+
+            # Concatenate
+            x = torch.cat([branch1x1, branch7x7, branch7x7dbl, branch_pool], dim=1)
+            input_shape = x.shape
+
+        # ------------------------------
+        # Reduction B (1 block)
+        #   branch3x3_1 -> branch3x3_2
+        #   branch7x7_1 -> branch7x7_2 -> branch7x7_3 -> branch7x7_4
+        #   branch_pool (with F.max_pool2d)
+        # ------------------------------
+        block = model.encoder.reduction_b
+        # Branch 3x3
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_1.conv, x.shape)
+        branch3x3 = block.branch3x3_1(x)
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_2.conv, branch3x3.shape)
+        branch3x3 = block.branch3x3_2(branch3x3)
+
+        # Branch 7x7
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_1.conv, x.shape)
+        branch7x7 = block.branch7x7_1(x)
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_2.conv, branch7x7.shape)
+        branch7x7 = block.branch7x7_2(branch7x7)
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_3.conv, branch7x7.shape)
+        branch7x7 = block.branch7x7_3(branch7x7)
+        mult_adds += count_mult_adds_layer_without_zero_ops(block.branch7x7_4.conv, branch7x7.shape)
+        branch7x7 = block.branch7x7_4(branch7x7)
+
+        # Branch pool
+        branch_pool = F.max_pool2d(x, kernel_size=3, stride=2)
+
+        # Concatenate
+        x = torch.cat([branch3x3, branch7x7, branch_pool], dim=1)
+        input_shape = x.shape
+
+        # ------------------------------
+        # Inception C (3 blocks)
+        # Each block is InceptionC with:
+        #   branch1x1 => 192
+        #   branch3x3 => split => (1,3), (3,1) => 384 total
+        #   branch3x3dbl => more splits => 384 total
+        #   branch_pool => 128
+        # ------------------------------
+        for block in model.encoder.inception_c:
+            # branch1x1
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch1x1.conv, x.shape)
+            branch1x1 = block.branch1x1(x)
+
+            # branch3x3 => first 1x1
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_1.conv, x.shape)
+            b3x3 = block.branch3x3_1(x)
+            # then split
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_2a.conv, b3x3.shape)
+            b3x3_a = block.branch3x3_2a(b3x3)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3_2b.conv, b3x3.shape)
+            b3x3_b = block.branch3x3_2b(b3x3)
+            branch3x3 = torch.cat([b3x3_a, b3x3_b], dim=1)
+
+            # branch3x3dbl => first 1x1
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_1.conv, x.shape)
+            b3x3dbl = block.branch3x3dbl_1(x)
+            # split 1
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_2a.conv, b3x3dbl.shape)
+            b3x3dbl_a = block.branch3x3dbl_2a(b3x3dbl)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_2b.conv, b3x3dbl.shape)
+            b3x3dbl_b = block.branch3x3dbl_2b(b3x3dbl)
+            b3x3dbl = torch.cat([b3x3dbl_a, b3x3dbl_b], dim=1)
+            # split 2
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_3a.conv, b3x3dbl.shape)
+            b3x3dbl_a = block.branch3x3dbl_3a(b3x3dbl)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch3x3dbl_3b.conv, b3x3dbl.shape)
+            b3x3dbl_b = block.branch3x3dbl_3b(b3x3dbl)
+            branch3x3dbl = torch.cat([b3x3dbl_a, b3x3dbl_b], dim=1)
+
+            # branch_pool => avg_pool first
+            pool_input = F.avg_pool2d(x, kernel_size=3, stride=1, padding=1)
+            mult_adds += count_mult_adds_layer_without_zero_ops(block.branch_pool.conv, pool_input.shape)
+            branch_pool = block.branch_pool(pool_input)
+
+            # final cat
+            x = torch.cat([branch1x1, branch3x3, branch3x3dbl, branch_pool], dim=1)
+            input_shape = x.shape
+
+        # ------------------------------
+        # Final classifier
+        # model.avgpool -> flatten -> model.fc
+        # ------------------------------
+        x = model.avgpool(x)
+        x = torch.flatten(x, 1)
+        input_shape = x.shape
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.fc, input_shape)
+
     elif (model_to_use.lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
         # Initial convolution
         mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, input_shape)
@@ -756,7 +1113,7 @@ def main():
     model_to_use = params['model_to_use']
     dataset_type = params['dataset_type']
     bs = 1
-    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','emnistresnet18']):
+    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','emnistresnet18','fmnistinceptionv4','kmnistdensenet']):
         input_shape = (bs, 1, 20, 20)
     elif (model_to_use.lower() in ['svhnresnet18']):
         input_shape = (bs, 3, 20,20)
