@@ -295,7 +295,59 @@ def get_params_groups_to_quantize(model, model_to_use):
             'Biases': {'params': biases}
         }
 
-
+    elif (model_to_use.lower() in ['fmnistinceptionv4']):
+        # -----------------------------------------------------
+        # 1) Last FC layer (adjust this if your model's final 
+        #    fully-connected layer has a different name)
+        # -----------------------------------------------------
+        if hasattr(model, 'fc') and model.fc is not None:
+            weights_last_fc = [model.fc.weight]
+        else:
+            # Fallback: if your final layer is named differently, 
+            # adjust here (e.g. model.classifier, model.last_linear, etc.)
+            weights_last_fc = []
+        
+        # -----------------------------------------------------
+        # 2) All convolution layers' weights 
+        #    (any parameter name containing ".conv" but not ".bias")
+        # -----------------------------------------------------
+        weights_to_be_quantized = [
+            p for n, p in model.named_parameters()
+            if ('conv' in n) and ('bias' not in n)
+        ]
+        names_params_to_be_quantized = [
+            n for n, p in model.named_parameters()
+            if ('conv' in n) and ('bias' not in n)
+        ]
+        
+        # -----------------------------------------------------
+        # 3) All batch-norm layers’ weights 
+        #    (any parameter name containing ".bn" or ".batch_norm",
+        #     and which also contains "weight")
+        # -----------------------------------------------------
+        bn_weights = [
+            p for n, p in model.named_parameters()
+            if (('bn' in n) or ('batch_norm' in n)) and ('weight' in n)
+        ]
+        
+        # -----------------------------------------------------
+        # 4) All bias terms
+        # -----------------------------------------------------
+        biases = [
+            p for n, p in model.named_parameters()
+            if 'bias' in n
+        ]
+        
+        # -----------------------------------------------------
+        # Group parameters into a dictionary for easy reference 
+        # and/or separate LR / optimization steps
+        # -----------------------------------------------------
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'BNWeights': {'params': bn_weights},
+            'Biases': {'params': biases}
+        }
     elif (model_to_use.lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
         # Last FC layer
         weights_last_fc = [model.fc.weight]

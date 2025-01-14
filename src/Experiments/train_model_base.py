@@ -875,7 +875,8 @@ class Experiment(object):
                 self.model = DenseNetClassificationModel(input_channels=1,nb_classes=10)
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=10)
-
+            elif (self.model_to_use.lower() in ['fmnistinceptionv4']):
+                self.model = InceptionV4ClassificationModel(input_channels=1,nb_classes=10)
             elif (self.model_to_use.lower() in ['emnistresnet18']):
                 self.model = ResNet18ClassificationModel(input_channels=1,nb_classes=26)
 
@@ -883,8 +884,7 @@ class Experiment(object):
                 self.model = ResNet18ClassificationModel(input_channels=3,nb_classes=10)
             elif (self.model_to_use.lower() in ['cifar10resnet50','stl10resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=10)
-            elif (self.model_to_use.lower() in ['stl10inceptionv4']):
-                self.model = InceptionV4ClassificationModel(input_channels=3,nb_classes=10)
+
             elif (self.model_to_use.lower() in ['cifar100resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
             elif (self.model_to_use.lower() in ['cifar100resnet34']):
@@ -1494,7 +1494,11 @@ def main():
         elif (parameters_exp['model_to_use'].lower() == 'mnistvit'):
             shutil.copy2('./src/Models/Transformers/mnist_vit.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
-            shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')   
+            shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')  
+
+        elif (parameters_exp['model_to_use'].lower() == 'fmnistinceptionv4'):
+            shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')   
+
         elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):

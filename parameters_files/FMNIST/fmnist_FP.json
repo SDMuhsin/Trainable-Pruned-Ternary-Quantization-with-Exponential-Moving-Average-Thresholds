@@ -1,5 +1,5 @@
 {
-    "exp_id": "CameraReady_FMNIST_ENET_FP",
+    "exp_id": "CameraReady_FMNIST_INCEPTIONV4_FP",
     "lr": 0.001,
     "nb_repetitions": 10,
     "batch_size_train": 32,
@@ -8,7 +8,7 @@
     "nb_epochs": 50,
     "loss_function": "CE",
     "model_type": "2DCNN",
-    "model_to_use": "fmnistenet",
+    "model_to_use": "fmnistinceptionv4",
     "do_normalization_weights": false,
     "device": "cuda",
     "use_soft_labels": false,
