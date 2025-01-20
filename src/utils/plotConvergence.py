@@ -26,7 +26,7 @@ ema_k1     = [22.90,  6.50,  2.90,  3.10,  3.00,  4.80,  4.20, 39.90]
 
 # Combine them in a list of lists for convenience
 all_techniques = [fp_data, dorefa, ttq, pttq, ema_k1]
-tech_labels    = ["FP (Baseline)", "DoReFa", "TTQ", "pTTQ", "EMA(k=1)"]
+tech_labels    = ["FP (Baseline)", "DoReFa [36]", "TTQ [15]", "pTTQ [16]", "EMA(k=1) [ours]"]
 
 #-----------------------------------------------------------------------------
 # 2. Create the figure & grouped bars
@@ -56,7 +56,7 @@ ax.set_ylabel('Convergence Epoch')
 ax.set_xticks(x)
 ax.set_xticklabels(datasets, rotation=0)  # rotate if needed for readability
 ax.set_title('Convergence Epochs for Different Compression Techniques')
-ax.legend()
+ax.legend(bbox_to_anchor=(0.5, -0.15), loc='upper center', ncol=3)
 
 # Optionally adjust layout
 plt.tight_layout()
