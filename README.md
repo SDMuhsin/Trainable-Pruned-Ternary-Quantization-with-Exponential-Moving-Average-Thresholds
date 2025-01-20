@@ -17,12 +17,18 @@ Then, you should install the different libraries needed to execute the different
 
 ## III) Proposed method
 
-![image](https://github.com/pTTQSubmission/pTTQ/blob/main/figs/MethodOverview.jpg) 
+![image](https://github.com/SDMuhsin/Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds/blob/main/pttq_ema_flow.png) 
 
-In a nutshell, our proposed method is composed of three steps, inspired from TTQ ([Zhu et al. (2016)](https://arxiv.org/abs/1612.01064)):
+Our proposed method is a modification of [pTTQ](https://www.sciencedirect.com/science/article/pii/S0925231224009871) , which is inspired from TTQ ([Zhu et al. (2016)](https://arxiv.org/abs/1612.01064)) and consists of:
 - **Pruning:** pruning is done before ternarization based on the weights's statistics and one weakly-differentiable pruning function with learnable parameters.
 - **Ternarization**: the remaining positive weights are set to $1$ and the negatives ones to $-1$.
 - **Scaling**: two full-precision scaling trainable parameters are assocaited to the ternary weights tensor, one for the positive weights $W_r$, and one for the negative ones, $W_l$.
+
+Out contribution is as follows:
+- Rather than using fluctuation prone instantaneous weight statistics, we use a global moving average based pruning mechanism
+- We introduce a tunable parameter that allows the practitioner to directly control the degree of pruning
+
+The paper is currently under review, for more information (and if you need to cite our work), please contact the author at ckp908@usask.ca
 
 ## IV) Code structure
 
