@@ -1,4 +1,4 @@
-# Pruned trained ternary quantization for medical signal classification models
+# Pruned trained ternary quantization for CNN models
 
 ## I) Introduction
 
