@@ -61,6 +61,7 @@ from src.Models.CNNs.densenet import DenseNetClassificationModel
 from src.Models.CNNs.inceptionv4 import InceptionV4ClassificationModel
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
+from src.Models.CNNs.vitcnn import HybridCNNViTModel
 
 #==============================================================================#
 #======================== Defining the experiment class ========================#
@@ -871,6 +872,8 @@ class Experiment(object):
             if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
                 self.model = MnistClassificationModel(input_channels=1, nb_classes=10)
                 pass
+            elif (self.model_to_use.lower() in ['mnistvitcnn']):
+                self.model = HybridCNNViTModel(input_channels=1,nb_classes=10,cnn_output_spatial_dim=2)
             elif (self.model_to_use.lower() in ['kmnistdensenet']):
                 self.model = DenseNetClassificationModel(input_channels=1,nb_classes=10)
             elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18']):
@@ -999,7 +1002,7 @@ class Experiment(object):
             self.sched = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',\
                                                                factor=0.1, patience=5,\
                                                                threshold=1e-4, threshold_mode='rel',\
-                                                               cooldown=0, min_lr=0, eps=1e-08, verbose=False)
+                                                               cooldown=0, min_lr=0, eps=1e-08) # Argument verbose
         else:
             self.optimizer = noam.Noam(
                             params=model_parameters,
@@ -1495,7 +1498,8 @@ def main():
             shutil.copy2('./src/Models/Transformers/mnist_vit.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')  
-
+        elif (parameters_exp['model_to_use'].lower() == 'mnistvitcnn'):
+            shutil.copy2('./src/Models/CNNs/vitcnn.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnistinceptionv4'):
             shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')   
 

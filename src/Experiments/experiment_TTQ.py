@@ -391,7 +391,7 @@ class Experiment(ExperimentBase):
                 nonzero += torch.count_nonzero(param)
             else:
                 # Params quantize
-                if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn']):
+                if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','mnistvitcnn']):
                     if ('conv' in name) and ('bias' not in name):
                         nonzero += torch.count_nonzero(param)
                 elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
@@ -422,7 +422,7 @@ class Experiment(ExperimentBase):
             for val in p.shape:
                 nb_params_layer *= val
             # Nb params quantize
-            if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
+            if (self.model_to_use.lower() in ['mnistvitcnn','mnist2dcnn','fmnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
                 if ('conv' in n) and ('bias' not in n):
                     nb_params_to_quantize += nb_params_layer
             elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
@@ -589,6 +589,8 @@ def main():
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'mnistvitcnn'):
+            shutil.copy2('./src/Models/CNNs/vitcnn.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar10resnet50','stl10resnet50']):

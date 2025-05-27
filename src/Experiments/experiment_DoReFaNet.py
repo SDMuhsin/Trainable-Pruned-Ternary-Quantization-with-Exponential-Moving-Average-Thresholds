@@ -288,7 +288,7 @@ class Experiment(ExperimentBase):
                 nonzero += torch.count_nonzero(param)
             else:
                 # More general method
-                if (self.model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','mnistvit','fmnistenet','kmnistdensenet','fmnistinceptionv4'])\
+                if (self.model_to_use.lower() in ['mnistvitcnn','mnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','mnistvit','fmnistenet','kmnistdensenet','fmnistinceptionv4'])\
                     or (self.model_to_use.lower() == 'rawaudiomultichannelcnn')\
                     or (self.model_to_use.lower() == 'timefrequency2dcnn'):
                         if (name in self.names_params_to_be_quantized):
@@ -310,7 +310,7 @@ class Experiment(ExperimentBase):
                 nb_params_layer *= val
 
             # Nb params quantize
-            if (self.model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','mnistvit','fmnistenet','kmnistdensenet','fmnistinceptionv4'])\
+            if (self.model_to_use.lower() in ['mnistvitcnn','mnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','mnistvit','fmnistenet','kmnistdensenet','fmnistinceptionv4'])\
                 or (self.model_to_use.lower() == 'rawaudiomultichannelcnn')\
                 or (self.model_to_use.lower() == 'timefrequency2dcnn'):
                     if (n in self.names_params_to_be_quantized):
@@ -475,6 +475,10 @@ def main():
             shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
             shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'mnistvitcnn'):
+            shutil.copy2('./src/Models/CNNs/vitcnn.py', resultsFolder + '/params_exp/network_architecture.py')
+
+
         elif (parameters_exp['model_to_use'].lower() == 'mnistvit'):
             shutil.copy2('./src/Models/Transformers/mnist_vit.py', resultsFolder + '/params_exp/network_architecture.py') 
         elif (parameters_exp['model_to_use'].lower() == 'mnistvit'):
