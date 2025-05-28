@@ -125,7 +125,7 @@ class Experiment(ExperimentBase):
             download_FP_models(model_to_use=self.model_to_use, dataset=self.dataset_type)
 
         # Loading the data of a model
-        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'))
+        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'), weights_only=False)
 
         # Loading the weights into the model
         self.model.load_state_dict(model_data['model_state_dict'])

@@ -108,7 +108,7 @@ def get_nb_bits_model(exp_results_folder, is_model_ternarized):
         nb_bits_quantized_layers_model = 0
         if ('jit' not in model_file.lower()) and (os.path.isfile(exp_results_folder + "/model/" + model_file)) and ('chechkpoint' not in model_file.lower()):
             # Loading the model into memory
-            model_dict = torch.load(exp_results_folder + "/model/" + model_file, map_location=torch.device('cpu'))
+            model_dict = torch.load(exp_results_folder + "/model/" + model_file, map_location=torch.device('cpu'),weights_only=False)
             model = model_dict['model']
 
             # Getting the list of the layers that have been quantized
@@ -170,7 +170,7 @@ def get_doReFa_nb_bits_storage(exp_results_folder):
     for model_file in os.listdir(model_folder):
         if ('jit' not in model_file.lower()) and ('checkpoint' not in model_file.lower()) and os.path.isfile(os.path.join(model_folder, model_file)):
             # Load model
-            model_dict = torch.load(os.path.join(model_folder, model_file), map_location=torch.device('cpu'))
+            model_dict = torch.load(os.path.join(model_folder, model_file), map_location=torch.device('cpu'),weights_only=False)
             model = model_dict['model']
 
             # Get quantized layers

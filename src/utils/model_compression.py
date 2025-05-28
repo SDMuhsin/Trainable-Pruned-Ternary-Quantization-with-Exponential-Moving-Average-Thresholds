@@ -4,7 +4,7 @@
     quantization
 """
 import torch
-
+import torch.nn as nn
 #==============================================================================#
 #====Functions for Ternary Networks from the paper of Heinrich et al. (2018)====#
 #==============================================================================#
@@ -153,6 +153,63 @@ def get_params_groups_to_quantize(model, model_to_use):
                     'BNWeights': {'params': bn_weights},
                     'Biases': {'params': biases}
                  }
+    # ======================================================================#
+    # ======================= Hybrid CNN-ViT (mnistvitcnn) =================#
+    # ======================================================================#
+    elif model_to_use.lower() == "mnistvitcnn":
+        # Assumes 'model' is an instance of HybridCNNViTModel
+
+        # Last FC layer weight from the MLP head
+        # model.mlp_head is nn.Sequential(nn.LayerNorm, nn.Linear)
+        # The final Linear layer is at index 1
+        weights_last_fc = []
+        if hasattr(model, 'mlp_head') and isinstance(model.mlp_head, nn.Sequential) and len(model.mlp_head) > 1:
+            final_linear_layer = model.mlp_head[-1] # Get the last layer
+            if isinstance(final_linear_layer, nn.Linear) and hasattr(final_linear_layer, 'weight'):
+                 weights_last_fc = [final_linear_layer.weight]
+        if not weights_last_fc:
+            print("Warning: Could not find LastFCLayer for mnistvitcnn")
+
+
+        # Parameters to quantize: Convolutional layer weights ONLY
+        # This includes conv layers in model.encoder and model.projection (if it's Conv2d)
+        weights_to_be_quantized = []
+        names_params_to_be_quantized = [] # Populated for consistency, though not directly returned in params
+
+        # Encoder's convolutional layers (e.g., encoder.conv1.weight, encoder.conv2.weight)
+        if hasattr(model, 'encoder'):
+            # Iterate through named modules of the encoder to find Conv2d layers
+            for module_name, module_obj in model.encoder.named_modules():
+                if isinstance(module_obj, nn.Conv2d):
+                    if hasattr(module_obj, 'weight') and module_obj.weight is not None:
+                        weights_to_be_quantized.append(module_obj.weight)
+                        # Construct full name relative to 'model'
+                        names_params_to_be_quantized.append(f"encoder.{module_name}.weight")
+
+        # Projection layer (if it's a Conv2d and has a weight)
+        if hasattr(model, 'projection') and isinstance(model.projection, nn.Conv2d):
+            if hasattr(model.projection, 'weight') and model.projection.weight is not None:
+                weights_to_be_quantized.append(model.projection.weight)
+                names_params_to_be_quantized.append('projection.weight')
+
+        # Layer Normalization weights (from ViT part: transformer_encoder and mlp_head)
+        # This should capture all nn.LayerNorm weights in the model.
+        ln_weights = []
+        for module_name, module_obj in model.named_modules():
+            if isinstance(module_obj, nn.LayerNorm):
+                if hasattr(module_obj, 'weight') and module_obj.weight is not None:
+                    ln_weights.append(module_obj.weight)
+                # Note: biases of LayerNorm will be caught by the 'Biases' group below.
+
+        # All biases in the model (from conv, linear, layernorm, etc.)
+        biases = [p for n, p in model.named_parameters() if 'bias' in n]
+
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'LNWeights': {'params': ln_weights}, # For LayerNorm weights
+            'Biases': {'params': biases}
+        }
 
     elif model_to_use.lower() in ['mnistvit']:
         # Last FC layer (classification head)

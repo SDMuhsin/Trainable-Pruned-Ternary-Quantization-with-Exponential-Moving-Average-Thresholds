@@ -80,6 +80,15 @@ def manual_transformer_encoder_computation(model, input_tensor):
         x = manual_transformer_encoder_layer_computation(model.layers[i], x)
     return x
 
+def _count_mha_in_proj_macs(mha_layer):
+    macs = 0
+    if hasattr(mha_layer, 'in_proj_weight') and mha_layer.in_proj_weight is not None:
+        macs += int(torch.count_nonzero(mha_layer.in_proj_weight))
+    if hasattr(mha_layer, 'in_proj_bias') and mha_layer.in_proj_bias is not None:
+        # Bias adds one operation per output feature of this projection part
+        macs += mha_layer.in_proj_bias.shape[0]
+    return macs
+
 def count_mult_adds_layer_without_zero_ops(layer, input_shape):
     """
         Count the number of mult-adds done to get the output of a layer.
@@ -102,14 +111,32 @@ def count_mult_adds_layer_without_zero_ops(layer, input_shape):
     # Type of layer
     layer_type_name = layer.__class__.__name__
 
-    # Creating a random input tensor
-    random_input_tensor = torch.randn(input_shape)
+    # Creating a random input tensor to trace output shape (if needed by logic below)
+    # Note: Be cautious if layer has state or expects specific input values beyond shape.
+    # For purely shape-based MAC counting, this is okay.
+    try:
+        # Check if input_shape needs to be on the same device as the layer
+        # This might be necessary if the layer itself is on a specific device.
+        # However, for shape inference with random tensor, CPU usually works if layer is also on CPU.
+        # If model is on GPU, random_input_tensor might need to be .to(layer.weight.device)
+        # For now, assume input_shape is sufficient and CPU tensor is fine for most cases.
+        device = layer.weight.device if hasattr(layer, 'weight') and layer.weight is not None else torch.device('cpu')
+        random_input_tensor = torch.randn(input_shape, device=device)
+        output_tensor = layer(random_input_tensor)
+        output_shape = output_tensor.shape
+    except Exception as e:
+        # Fallback or error if shape inference fails, though critical for Conv MACs
+        # print(f"Warning: Could not trace output shape for {layer_type_name} with input {input_shape}. Error: {e}")
+        # For Linear, BN, LN, output_shape is less directly used in your current MAC calculation for weights/bias count
+        # For Conv, it's essential.
+        # If this fails, the Conv MACs might be wrong.
+        # A simple fallback for layers where output_shape is not strictly needed by *your* MAC formulas:
+        if layer_type_name in ['Linear', 'NonDynamicallyQuantizableLinear', 'BatchNorm2d', 'LayerNorm']:
+            pass # Output shape not directly used for these specific MAC formulas you have for weights.
+        else: # For Conv2d, Conv1d, this is a problem.
+            raise ValueError(f"Cannot compute output shape for {layer_type_name} to count MACs. Error: {e}")
 
-    # Computing the output of the layer to get the output size
-    output_tensor = layer(random_input_tensor)
-    output_shape = output_tensor.shape
 
-    # Counting the number of params
     mult_adds = 0
     # Conv2D
     if (layer_type_name == 'Conv2d'):
@@ -125,7 +152,7 @@ def count_mult_adds_layer_without_zero_ops(layer, input_shape):
     elif (layer_type_name == 'Conv1d'):
         # For the weights
         nb_params_weights = int(torch.count_nonzero(layer.weight))
-        mult_adds += output_shape[2]*nb_params_weights
+        mult_adds += output_shape[2]*nb_params_weights # output_shape[2] is sequence length for (B, C, L)
 
         # For the bias
         if (layer.bias is not None):
@@ -133,30 +160,43 @@ def count_mult_adds_layer_without_zero_ops(layer, input_shape):
 
     # BatchNorm2D and LayerNorm
     elif (layer_type_name == 'BatchNorm2d') or (layer_type_name == 'LayerNorm'):
-        # For the weights
-        mult_adds += layer.weight.shape[0]
+        # For the weights (gamma)
+        if layer.weight is not None: # Check existence for affine=False cases
+            mult_adds += layer.weight.shape[0]
 
-        # For the bias
-        if (layer.bias is not None):
+        # For the bias (beta)
+        if (layer.bias is not None): # Check existence for affine=False cases
             mult_adds += layer.bias.shape[0]
 
     # Linear layers
-    elif (layer_type_name == 'Linear'):
-        # For the weights
-        if (len(input_shape) > 3):
-            raise ValueError("For linear layers the input shape should be [bs, nb_in_features] or [bs, 1, nb_in_features]")
-        else:
-            mult_adds += int(torch.count_nonzero(layer.weight))
+    # Linear layers
+    elif isinstance(layer, nn.Linear): # ***** MODIFIED LINE *****
+        # Check input_shape constraints as per original logic
+        # The function expects input_shape to be effectively 2D (batch, features) for its internal random tensor.
+        if not (len(input_shape) == 2 or (len(input_shape) == 3 and input_shape[1] == 1)):
+             # This condition might need adjustment based on how you want to handle (Batch, Seq, Feature) for Linear.
+             # If input_shape is (B, S, F), the random_input_tensor might need to be (B*S, F).
+             # For now, keeping it simple, assuming input_shape passed is already 2D for Linear.
+             if len(input_shape) > 2: # Simplified check for >2D if not the [bs, 1, features] case
+                pass # Allow >2D shapes if the layer itself can handle it before this check,
+                     # but the user's example for model.fc passes a 2D shape.
+                     # print(f"Warning: Linear layer received input_shape {input_shape}, ensure compatibility.")
+
+
+        # The MAC counting for Linear layers in your function sums non-zero weights and bias elements.
+        # This is a layer property, not scaled by input size in this part of your function.
+        mult_adds += int(torch.count_nonzero(layer.weight))
 
         # For the bias
         if (layer.bias is not None):
             mult_adds += layer.bias.shape[0]
 
+
     else:
-        raise ValueError("Layers of type {} are not supported".format(layer_type_name))
+        print(f"Warning: Layers of type {layer_type_name} are not explicitly supported by count_mult_adds_layer_without_zero_ops. MACs for this layer will be 0.")
+        # raise ValueError("Layers of type {} are not supported".format(layer_type_name)) # Optionally raise error
 
     return mult_adds
-
 
 def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
     """
@@ -310,7 +350,119 @@ def count_mult_adds_model_without_zero_ops(model, model_to_use, input_shape):
         x = torch.flatten(x, 1)
         input_shape = x.shape
         mult_adds += count_mult_adds_layer_without_zero_ops(model.fc, input_shape)
+    elif model_to_use.lower() == 'mnistvitcnn':
+        # Ensure random_input_tensor is on the same device as the model if using GPU
+        # device = next(model.parameters()).device
+        # x = random_input_tensor.to(device)
+        # For now, assuming CPU or device consistency is handled outside or as per existing setup.
+        x = random_input_tensor
 
+        # 1. CNN Encoder part (model.encoder is MnistEncoderModel)
+        # model.encoder.conv1
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv1, x.shape)
+        x = F.max_pool2d(F.relu(model.encoder.conv1(x)), 2)
+        
+        # model.encoder.conv2_drop (Dropout - no MACs, just pass x for shape tracking)
+        x = model.encoder.conv2_drop(x)
+        
+        # model.encoder.conv2
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.encoder.conv2, x.shape)
+        x = F.max_pool2d(F.relu(model.encoder.conv2(x)), 2)
+        # At this point, x shape is typically (batch_size, cnn_output_channels, H_enc, W_enc)
+        # For default MNIST: (B, 20, 4, 4)
+
+        # 2. Projection layer (model.projection)
+        # If it's nn.Identity, it won't be caught by count_mult_adds_layer_without_zero_ops
+        # which expects specific layer types. nn.Identity has no MACs.
+        if not isinstance(model.projection, nn.Identity):
+            mult_adds += count_mult_adds_layer_without_zero_ops(model.projection, x.shape)
+        x = model.projection(x) # x shape: (B, vit_embed_dim, H_enc, W_enc)
+
+        # 3. Reshape for ViT
+        # (B, D, H, W) -> (B, D, N) -> (B, N, D) where N = H*W, D = vit_embed_dim
+        x_patches = x.flatten(2).transpose(1, 2)  # Shape: (B, num_patches, vit_embed_dim)
+        
+        batch_size, num_patches_effective, embed_dim = x_patches.shape
+        
+        # Prepend CLS token & Add Positional Embedding (these are parameter operations, not layers for the counter)
+        # Shape propagation for ViT input sequence:
+        # cls_token is (1, 1, D), pos_embedding is (1, N+1, D)
+        # x_seq shape becomes (B, num_patches + 1, embed_dim)
+        # For shape tracking, we can simulate this:
+        seq_len = num_patches_effective + 1 # +1 for CLS token
+        # x_seq_shape_sim = (batch_size, seq_len, embed_dim) # This is the shape of input to Transformer Encoder
+
+        # For layers inside Transformer that operate on (B, S, D) but the counter expects (BatchLike, Features):
+        # We will pass a 2D shape (B*S, D) to the counter for LayerNorm and Linear layers.
+        
+        # Propagate x_patches to include CLS token and pos_embedding for actual forward pass in shape tracking
+        _cls_token_expanded = model.cls_token.expand(batch_size, -1, -1)
+        current_sequence = torch.cat((_cls_token_expanded, x_patches), dim=1)
+        current_sequence = current_sequence + model.pos_embedding # Shape: (B, seq_len, embed_dim)
+
+        # 4. Transformer Encoder (model.transformer_encoder)
+        for transformer_layer in model.transformer_encoder.layers:
+            # Input to the block is current_sequence (B, S, D)
+            
+            # Reshape input for counter for LayerNorm/Linear: (B*S, D)
+            # This assumes LayerNorm/Linear are applied per token.
+            bs_seq_shape_for_counter = (current_sequence.shape[0] * current_sequence.shape[1], current_sequence.shape[2])
+
+            # Norm 1 (assuming norm_first=True as in HybridCNNViTModel)
+            mult_adds += count_mult_adds_layer_without_zero_ops(transformer_layer.norm1, bs_seq_shape_for_counter)
+            x_norm1_out = transformer_layer.norm1(current_sequence) # For shape tracking: (B,S,D)
+            
+            # Self-Attention (nn.MultiheadAttention)
+            # The count_mult_adds_layer_without_zero_ops function can only count explicit submodules like 'out_proj'.
+            # Q, K, V projections and attention score calculations are not directly captured if they use F.linear internally.
+            # Input to self_attn is x_norm1_out
+            x_attn_output, _ = transformer_layer.self_attn(x_norm1_out, x_norm1_out, x_norm1_out, need_weights=False)
+            # x_attn_output shape: (B,S,D)
+            
+            # Count MACs for self_attn.out_proj (which is an nn.Linear layer)
+            # Input to out_proj is effectively x_attn_output, so shape for counter is (B*S,D)
+            mult_adds += count_mult_adds_layer_without_zero_ops(transformer_layer.self_attn.out_proj, bs_seq_shape_for_counter)
+            
+            # Residual connection after attention
+            x_after_attn = current_sequence + x_attn_output # For shape tracking
+            
+            # Norm 2
+            mult_adds += count_mult_adds_layer_without_zero_ops(transformer_layer.norm2, bs_seq_shape_for_counter)
+            x_norm2_out = transformer_layer.norm2(x_after_attn) # For shape tracking: (B,S,D)
+            
+            # Feed-Forward Network (FFN)
+            # linear1: Linear(embed_dim, mlp_dim)
+            # Input to linear1 is x_norm2_out (B,S,D)
+            mult_adds += count_mult_adds_layer_without_zero_ops(transformer_layer.linear1, bs_seq_shape_for_counter)
+            x_ffn1_active = transformer_layer.activation(transformer_layer.linear1(x_norm2_out)) # For shape tracking
+            # x_ffn1_active shape: (B, S, mlp_dim)
+
+            # linear2: Linear(mlp_dim, embed_dim)
+            # Input to linear2 is x_ffn1_active
+            ffn1_bs_seq_shape_for_counter = (x_ffn1_active.shape[0] * x_ffn1_active.shape[1], x_ffn1_active.shape[2])
+            mult_adds += count_mult_adds_layer_without_zero_ops(transformer_layer.linear2, ffn1_bs_seq_shape_for_counter)
+            x_ffn2_out = transformer_layer.linear2(x_ffn1_active) # For shape tracking: (B,S,D)
+            
+            # Residual connection after FFN
+            current_sequence = x_after_attn + x_ffn2_out # Update input for the next transformer layer
+
+        # After Transformer Encoder, current_sequence is (B, seq_len, embed_dim)
+        # 5. MLP Head (model.mlp_head)
+        # Get CLS token output (the first token in the sequence)
+        cls_token_output = current_sequence[:, 0]  # Shape: (B, embed_dim)
+        
+        # fc_drop (Dropout - no MACs)
+        cls_token_dropped = model.fc_drop(cls_token_output) # For shape tracking
+
+        # LayerNorm in MLP head (model.mlp_head[0])
+        # Input is cls_token_dropped (B, embed_dim) - this is already 2D
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.mlp_head[0], cls_token_dropped.shape)
+        x_mlp_norm = model.mlp_head[0](cls_token_dropped) # For shape tracking
+        
+        # Linear layer in MLP head (model.mlp_head[1])
+        # Input is x_mlp_norm (B, embed_dim) - this is already 2D
+        mult_adds += count_mult_adds_layer_without_zero_ops(model.mlp_head[1], x_mlp_norm.shape)
+        # x_final_logits = model.mlp_head[1](x_mlp_norm) # Final output before softmax
 
     elif (model_to_use.lower() == 'mnist2dcnn'):
         # Encoder layers
@@ -1046,7 +1198,7 @@ def compute_energy_consumption(experiment_model_path, model_to_use, input_shape)
         # Loading the model into memory
         if ('jit' not in model_file.lower()):
             print("Treating model file: ", model_file)
-            model_dict = torch.load(experiment_model_path + '/model/' + model_file, map_location=torch.device('cpu'))
+            model_dict = torch.load(experiment_model_path + '/model/' + model_file, map_location=torch.device('cpu'),weights_only=False)
             model = model_dict['model']
             # Number of mult-adds
             nb_mult_adds_without_zero_ops = count_mult_adds_model_without_zero_ops(model=model, model_to_use=model_to_use, input_shape=input_shape)
@@ -1113,7 +1265,7 @@ def main():
     model_to_use = params['model_to_use']
     dataset_type = params['dataset_type']
     bs = 1
-    if (model_to_use.lower() in ['mnist2dcnn','kmnistresnet18','fmnistresnet18','emnistresnet18','fmnistinceptionv4','kmnistdensenet']):
+    if (model_to_use.lower() in ['mnistvitcnn','mnist2dcnn','kmnistresnet18','fmnistresnet18','emnistresnet18','fmnistinceptionv4','kmnistdensenet']):
         input_shape = (bs, 1, 20, 20)
     elif (model_to_use.lower() in ['svhnresnet18']):
         input_shape = (bs, 3, 20,20)

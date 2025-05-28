@@ -224,7 +224,7 @@ class Experiment(ExperimentTTQ):
             self.sched = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',\
                                                                factor=0.1, patience=5,\
                                                                threshold=1e-4, threshold_mode='rel',\
-                                                               cooldown=0, min_lr=0, eps=1e-08, verbose=False)
+                                                               cooldown=0, min_lr=0, eps=1e-08)
 
         # Copy the full precision weights of the parameters that are going to be
         # quantized (so not all the FP weights)
@@ -277,7 +277,7 @@ class Experiment(ExperimentTTQ):
                                              for x, y in initial_thresh],
                                             lr=self.lr_thresh
                                          )
-        self.sched_t = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_t, T_max=10, eta_min=1e-7, last_epoch=-1, verbose=True)
+        self.sched_t = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_t, T_max=10, eta_min=1e-7, last_epoch=-1)
 
 
         # Alpha value
@@ -288,7 +288,7 @@ class Experiment(ExperimentTTQ):
                                                 lr=self.lr_alpha
                                              )
             # Creating learning rate scheduler for the alpha values
-            self.sched_alpha = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_alpha, T_max=10, eta_min=1e-7, last_epoch=-1, verbose=True)
+            self.sched_alpha = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_alpha, T_max=10, eta_min=1e-7, last_epoch=-1)
         else:
             self.optimizer_alpha = None
 
@@ -632,6 +632,8 @@ def main():
                 shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+            elif (parameters_exp['model_to_use'].lower() == 'mnistvitcnn'):
+                shutil.copy2('./src/Models/CNNs/vitcnn.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'fmnist2dcnn'):
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):

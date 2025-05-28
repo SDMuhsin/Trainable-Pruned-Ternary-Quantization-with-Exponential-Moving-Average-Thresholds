@@ -146,7 +146,7 @@ class Experiment(ExperimentBase):
                                        for name, param in self.model.state_dict().items()})
 
         # Loading the data of a model
-        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'))
+        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'), weights_only=False)
 
         # Sanity check: Ensure model_state_dict exists in model_data
         if 'model_state_dict' not in model_data:
