@@ -517,6 +517,76 @@ def get_params_groups_to_quantize(model, model_to_use):
 
     return params, names_params_to_be_quantized
 
+def pruning_function_pTTQ_experimental_v2(x, alpha, t_min, t_max, k=1, beta=0.9):
+    relu = torch.nn.ReLU()
+    sigmoid = torch.nn.Sigmoid()
+
+    # --- MODIFICATION START ---
+    # Calculate statistics for the EMA update.
+    # If x is 2D (likely a linear layer), compute statistics based on per-row averages.
+    # This aims to make the EMA thresholds more representative of an "average neuron"
+    # rather than being skewed by a few outlier rows/columns.
+    if x.ndim == 2:
+        # Assuming x is (out_features, in_features)
+        # Calculate mean and std for each output feature's weights (row-wise)
+        per_row_means = x.mean(dim=1) # Shape: (out_features,)
+        per_row_stds = x.std(dim=1)   # Shape: (out_features,)
+
+        # Aggregate these to get scalar values for the EMA update
+        # Use the mean of these per-row statistics.
+        # This provides a scalar that reflects the "average" row's characteristics.
+        current_x_mean_for_ema = per_row_means.mean()
+        current_x_std_for_ema = per_row_stds.mean()
+        
+        # Handle cases where std might be zero (e.g., if all rows are constant or single-element rows)
+        if torch.isnan(current_x_std_for_ema) or current_x_std_for_ema.item() == 0:
+            # Fallback to global std if average row std is problematic, or use a small epsilon
+            # For simplicity, fallback to global std of the whole tensor x if avg_row_std is 0/NaN
+            # Or, if we want to ensure it's based on row-wise view, use global std if avg_row_std is 0
+            # and keep mean as avg_row_mean.
+            # A simple approach if avg_row_std is zero: the std term contributes nothing.
+            # The original code doesn't explicitly add epsilon to x_std, so we'll be consistent.
+            if current_x_std_for_ema.item() == 0: # Check item() for scalar tensor
+                 pass # It's fine, (t_min * 0) is 0
+            else: # NaN case, fallback to global for safety
+                 current_x_mean_for_ema = x.mean()
+                 current_x_std_for_ema = x.std()
+
+    else:
+        # For non-2D tensors (e.g., convolutional kernels), use global statistics as before
+        current_x_mean_for_ema = x.mean()
+        current_x_std_for_ema = x.std()
+    
+    # Ensure std is not NaN (can happen if x has size 0 or 1 along a dimension being reduced)
+    if torch.isnan(current_x_std_for_ema):
+        current_x_std_for_ema = torch.tensor(0.0, device=x.device) # Default to 0 std if NaN
+
+    # Calculate the current sample for the adaptive thresholds based on (potentially modified) stats
+    current_sample_min_thresh = (current_x_mean_for_ema + t_min * current_x_std_for_ema).abs()
+    current_sample_max_thresh = (current_x_mean_for_ema + t_max * current_x_std_for_ema).abs()
+    # --- MODIFICATION END ---
+
+    # Compute adaptive thresholds with exponential moving average
+    # The EMA mechanism itself remains global to the function object.
+    with torch.no_grad():
+        if not hasattr(pruning_function_pTTQ_experimental, 'ema_min'):
+            pruning_function_pTTQ_experimental.ema_min = current_sample_min_thresh
+            pruning_function_pTTQ_experimental.ema_max = current_sample_max_thresh
+        else:
+            pruning_function_pTTQ_experimental.ema_min = beta * pruning_function_pTTQ_experimental.ema_min + \
+                                                         (1 - beta) * current_sample_min_thresh
+            pruning_function_pTTQ_experimental.ema_max = beta * pruning_function_pTTQ_experimental.ema_max + \
+                                                         (1 - beta) * current_sample_max_thresh
+
+    delta_min = pruning_function_pTTQ_experimental.ema_min
+    delta_max = pruning_function_pTTQ_experimental.ema_max
+
+    # Apply pruning with adaptive thresholds (which are scalar EMAs) and tempered aggressiveness
+    # The pruning formula itself still applies these scalar deltas to the entire tensor x.
+    res = relu(x - k * delta_max) + k * delta_max * sigmoid(alpha * (x - k * delta_max)) - \
+          relu(-x - k * delta_min) - k * delta_min * sigmoid(alpha * (-x - k * delta_min))
+
+    return res
 
 def pruning_function_pTTQ(x, alpha, t_min, t_max):
     """

@@ -1,0 +1,647 @@
+#!/usr/bin/env python3
+"""
+    Compress a pre-trained model using a modified version of TTQ.
+
+    Options:
+    --------
+    --parameters_file: str
+        Path to a file containing the parameters of the experiment.
+        This files are usually located in /hits_signal_learning/parameters_files/model_compression/
+"""
+import os
+import json
+import shutil
+import pickle
+import argparse
+from tqdm import tqdm
+
+import random
+
+import numpy as np
+from math import floor
+import matplotlib as mpl
+from datetime import datetime
+from collections import OrderedDict
+
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef
+
+import torch
+import torch.nn as nn
+from torchsummary import summary
+from torch.autograd import Variable
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
+import torch.nn.utils.prune as prune
+
+from labml_nn.optimizers import noam
+
+from src.Experiments.train_model_base import Experiment as ExperimentBase
+
+from src.utils.GCE import GeneralizedCrossEntropy
+from src.utils.model_compression import approx_weights, approx_weights_fc, get_params_groups_to_quantize
+from src.utils.download_exp_data import download_FP_models
+
+from src.Models.CNNs.mnist_CNN import weights_init
+from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN # Network used for training
+from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
+
+#==============================================================================#
+#======================== Defining the experiment class ========================#
+#==============================================================================#
+
+# class Experiment(ExperimentOneFeature):
+class Experiment(ExperimentBase):
+    def __init__(self, parameters_exp):
+        """
+            Compress a pre-trained model using a modified version of TTQ.
+
+            Arguments:
+            ----------
+            parameters_exp: dict
+                Dictionary containing the parameters of the experiment:
+                    * exp_id: str, name of the experiment.
+                    * feature_type
+        """
+        # Parent constructor
+        super().__init__(parameters_exp)
+
+        # Threshold hyper-parameter for TTQ
+        if ('t' not in parameters_exp):
+            parameters_exp['t'] = 0.05
+        self.t = parameters_exp['t']
+
+        # Folder path to the pre-trained models
+        if ('trained_fp_models_folder' not in parameters_exp):
+            print("\n\n\n\n!!!!!!!!!! WARNING: NO PRE-TRAINED MODELS GIVEN, MODELS WILL BE TRAINED FROM SCRATCH. DO YOU WANT TO CONTINUE (Yes/Y, No/N)? !!!!!!!!!!\n\n\n\n")
+            continue_run = input()
+            if (continue_run.lower() == 'no') or (continue_run.lower() == 'n'):
+                exit()
+            # elif (continue_run.lower() == 'yes') or (continue_run.lower() == 'y'):
+            else:
+                print("!!!!!!!!!! CONTINUING EXPERIMENT !!!!!!!!!!\n\n\n\n")
+            parameters_exp['trained_fp_models_folder'] = None
+        self.trained_fp_models_folder = parameters_exp['trained_fp_models_folder']
+        self.trained_fp_models_files = []
+        for model_file in os.listdir(self.trained_fp_models_folder):
+            if ('final_' in model_file):
+                self.trained_fp_models_files.append(self.trained_fp_models_folder+'/'+model_file)
+        print("Pre-trained models files to use: ", self.trained_fp_models_files, len(self.trained_fp_models_files))
+
+        # Parameters of the exp
+        self.parameters_exp = parameters_exp
+
+
+    def quantize(self, kernel, w_p, w_n):
+        delta_base = self.t * kernel.abs().max()
+        
+        # Adaptive threshold relaxation with bounded gamma
+        gamma = 0.6  # Zero-region expansion factor (0 < gamma < 1)
+        delta = delta_base * (1 + gamma * torch.sigmoid(-kernel.abs().mean()/delta_base))
+        
+        # Stabilized ternary projection
+        a = (kernel > delta).float()
+        b = (kernel < -delta).float()
+        return w_p*a + (-w_n*b)
+
+    def get_grads(self, kernel_grad, kernel, w_p, w_n):
+        delta = self.t * kernel.abs().max()
+        a = (kernel > delta).float()
+        b = (kernel < -delta).float()
+        c = 1.0 - a - b
+
+        # Base gradient components
+        k_fp_grad = w_p*a*kernel_grad + w_n*b*kernel_grad + 1.0*c*kernel_grad
+        w_p_grad = (a*kernel_grad).sum()
+        w_n_grad = (b*kernel_grad).sum()
+
+        # Sparsity-inducing gradient scaling
+        zeta = 3.0  # Aggression factor (zeta > 1)
+        proximity = (kernel.abs() / delta).clamp_max(1.0)
+        scale_factor = zeta * (1 - proximity)**3  # Cubic decay
+        
+        # Directional sparsity pressure
+        k_fp_grad += scale_factor * torch.sign(kernel) * (c * kernel_grad.abs().mean())
+
+        return k_fp_grad, w_p_grad, w_n_grad
+
+    def get_params_groups_quantization(self):
+        # Getting the groups of parameters to quantize
+        params, self.names_params_to_be_quantized = get_params_groups_to_quantize(self.model, self.model_to_use)
+        return params
+
+    def load_weights_model(self):
+        # Verifying if the model's weights file exists
+        if not os.path.exists(self.model_weights_file):
+            download_FP_models(model_to_use=self.model_to_use, dataset=self.dataset_type)
+
+        # Store initial weights for comparison
+        initial_weights = OrderedDict({name: param.clone().detach().cpu().numpy() 
+                                       for name, param in self.model.state_dict().items()})
+
+        # Loading the data of a model
+        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'), weights_only=False)
+
+        # Sanity check: Ensure model_state_dict exists in model_data
+        if 'model_state_dict' not in model_data:
+            raise KeyError("model_state_dict not found in the loaded model data")
+
+        # Loading the weights into the model
+        self.model.load_state_dict(model_data['model_state_dict'])
+
+        # Sanity checks after loading
+        loaded_weights = OrderedDict({name: param.clone().detach().cpu().numpy() 
+                                      for name, param in self.model.state_dict().items()})
+        
+        # 1. Check if weights are different before and after loading
+        different_weights = 0
+        total_weights = 0
+        weight_diff_percentages = []
+
+        for name in initial_weights.keys():
+            if name in loaded_weights:
+                initial = initial_weights[name]
+                loaded = loaded_weights[name]
+                
+                if initial.shape != loaded.shape:
+                    print(f"Shape mismatch for {name}: Initial {initial.shape}, Loaded {loaded.shape}")
+                    continue
+                
+                diff = np.abs(initial - loaded)
+                diff_percentage = np.mean(diff != 0) * 100
+                weight_diff_percentages.append(diff_percentage)
+                
+                if not np.array_equal(initial, loaded):
+                    different_weights += 1
+                total_weights += 1
+
+        if total_weights > 0:
+            percent_different = (different_weights / total_weights) * 100
+            avg_diff_percentage = np.mean(weight_diff_percentages)
+            print(f"===> {percent_different:.2f}% of weights are different after loading")
+            print(f"===> On average, {avg_diff_percentage:.2f}% of values within each weight tensor changed")
+        else:
+            print("No weights found for comparison")
+
+        # 2. Verify that weights from model_data['model_state_dict'] have been loaded
+        for name, param in model_data['model_state_dict'].items():
+            if name not in loaded_weights:
+                print(f"Warning: {name} from loaded data not found in model")
+            elif not np.array_equal(param.cpu().numpy(), loaded_weights[name]):
+                print(f"Warning: {name} values do not match between loaded data and model")
+
+        if different_weights > 0:
+            print("===> Model loaded successfully with weight changes!")
+        else:
+            print("Warning: Model loaded, but no weight changes detected")
+
+        return different_weights > 0
+
+    def load_weights_model_original(self):
+        # Verifying if the model's weights file exists
+        if not (os.path.exists(self.model_weights_file)):
+            download_FP_models(model_to_use=self.model_to_use, dataset=self.dataset_type)
+
+        # Loading the data of a model
+        model_data = torch.load(self.model_weights_file, map_location=torch.device('cpu'))
+
+        ## Loading the weights into the model
+        self.model.load_state_dict(model_data['model_state_dict'])
+        print("===> Model loaded successfully !")
+
+    def initial_scales(self, kernel):
+        return 1.0, 1.0
+
+    def createOptimizer(self, model_params_dict):
+        """
+        🐲 DAPT-Q Optimizer Creation.
+        Creates a new optimizer for the learnable threshold parameters `alpha`.
+        """
+        # 🐲 FIX: The main optimizer must be initialized with ALL parameter groups
+        # to match the structure expected by the rest of the training script.
+        # The previous implementation filtered this list, causing the TypeError.
+        self.optimizer = torch.optim.Adamax(
+            [model_params_dict[group_name] for group_name in model_params_dict],
+            lr=self.lr
+        )
+
+        # Prepare full-precision copies and initial quantization values
+        # The index [1] is based on the assumption that the 'ToQuantize' group is the second one.
+        kernels_to_quantize = self.optimizer.param_groups[1]['params']
+        kernels_to_quantize_fp_copy = [Variable(k.data.clone(), requires_grad=True) for k in kernels_to_quantize]
+
+        initial_scaling_factors = []
+        initial_alphas = []
+
+        # A more numerically stable way to compute the inverse of softplus
+        def inverse_softplus(x, eps=1e-6):
+            x = torch.as_tensor(x)
+            # Use approximation for small x to avoid log(0)
+            is_small = x < eps
+            result = torch.zeros_like(x)
+            # Approximation: softplus(y) ~= y for large y, so inverse is identity
+            # Approximation: softplus(y) ~= exp(y) for large negative y, so inverse is log
+            # General case: y = log(exp(x)-1)
+            result[is_small] = torch.log(x[is_small])
+            result[~is_small] = x[~is_small] + torch.log(1 - torch.exp(-x[~is_small]))
+            # Handle potential overflow for very large x, where exp(x)-1 is just exp(x)
+            result[x > 30] = x[x > 30] # softplus is identity for large inputs
+            return result
+
+        # Initial Quantization and parameter setup
+        for k, k_fp in zip(kernels_to_quantize, kernels_to_quantize_fp_copy):
+            # 1. Initialize scaling factors (w_p, w_n)
+            w_p_initial, w_n_initial = self.initial_scales(k_fp.data)
+            initial_scaling_factors.append((w_p_initial, w_n_initial))
+
+            # 2. Initialize alpha to create a starting threshold (e.g., at 5% of max)
+            initial_delta = 0.05 * k_fp.data.abs().max()
+            # Ensure delta is not zero to avoid log(0)
+            if initial_delta.item() < 1e-9:
+                initial_delta = torch.tensor(1e-9)
+
+            alpha_initial_val = inverse_softplus(initial_delta).item()
+            alpha_initial = Variable(torch.full((1,), alpha_initial_val, device=self.device), requires_grad=True)
+            initial_alphas.append(alpha_initial)
+
+            # 3. Perform initial quantization
+            k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial, alpha_initial)
+
+        # Optimizer for full-precision kernels
+        self.optimizer_fp = torch.optim.Adamax(kernels_to_quantize_fp_copy, lr=self.lr)
+
+        # Optimizer for scaling factors
+        self.optimizer_sf = torch.optim.Adamax(
+            [Variable(torch.FloatTensor([w_p, w_n]).to(self.device), requires_grad=True) for w_p, w_n in initial_scaling_factors],
+            lr=self.lr
+        )
+
+        # 🐲 4. Optimizer for the new learnable alpha parameters
+        self.optimizer_alpha = torch.optim.Adamax(initial_alphas, lr=self.lr * 0.1)
+    def optimize_step(self, loss_value):
+        """
+            Simple optimization step
+        """
+        # Zero grad for all optimizers
+        self.optimizer.zero_grad()
+        self.optimizer_fp.zero_grad()
+        self.optimizer_sf.zero_grad()
+
+        # Gradients for the quantized model
+        loss_value.backward()
+
+        # Gett the quantized kernels
+        quantized_kernels = self.optimizer.param_groups[1]['params']
+
+        # Get the FP copies of the original kernels
+        fp_kernels = self.optimizer_fp.param_groups[0]['params']
+
+        # Getting the scaling factors of the kernels
+        scaling_factors = self.optimizer_sf.param_groups[0]['params']
+
+        for i in range(len(quantized_kernels)):
+            # Current quantized kernel
+            k = quantized_kernels[i]
+
+            # Getting the FP version of the current kernel
+            k_fp = fp_kernels[i]
+
+            # Getting the scaling factors for the quantized kernel
+            f = scaling_factors[i]
+            w_p, w_n = f.data[0], f.data[1]
+
+            # Getting the gradients
+            k_fp_grad, w_p_grad, w_n_grad = self.get_grads(k.grad.data, k_fp.data, w_p, w_n)
+
+            # Gradient for the full precision kernels
+            k_fp.grad = Variable(k_fp_grad)
+
+            # The quantized kernels are not updated (they are computed from the FP kernels)
+            k.grad.data.zero_()
+
+            # Gradient for the scaling factors
+            f.grad = Variable(torch.FloatTensor([w_p_grad, w_n_grad])).to(self.device)
+
+        # Update all the parameters that should not be quantized (usually the first and last
+        # layers, as well as the batch norm parameters)
+        self.optimizer.step()
+
+        # Update the full precision kernels
+        self.optimizer_fp.step()
+
+        # Updating the scaling factor parameters
+        self.optimizer_sf.step()
+
+        # Quantize the updated full precision kernels
+        for i in range(len(quantized_kernels)):
+            k = quantized_kernels[i]
+            k_fp = fp_kernels[i]
+            f = scaling_factors[i]
+            w_p, w_n = f.data[0], f.data[1]
+            k.data = self.quantize(k_fp.data, w_p, w_n) # REVERT
+
+    def normalize_weights(self, per_channel_norm=True):
+        """
+            Normalize the weights of a model.
+            Convolutions are normalized PER CHANNEL.
+            The rest of the layers are normalized at a layer level.
+
+            Arguments:
+            ----------
+            model: torch model
+                Model from which we want to normalize the weights.
+            per_channel_norm: bool
+                Bool indicating if normalization is done per channel for convolutional
+                layers
+        """
+        # print("\n\n\n\nNormalizing ONLY the WEIGHTS to be QUANTIZED !!!!!!\n\n\n\n")
+        with torch.no_grad():
+            for named_param in self.model.named_parameters():
+                if (named_param[0] in self.names_params_to_be_quantized):
+                    # print("\n======>Normalizing param {} <=======\n\n".format(named_param[0]))
+                    #print('\n\nParam: {}\n'.format(named_param[0]))
+                    # Doing it layer by layer and channel by channel
+                    if ('conv' in named_param[0]) and ('bias' not in named_param[0]):
+                        if (per_channel_norm):
+                            for conv_filter_idx in range(named_param[1].shape[0]):
+                                named_param[1].data[conv_filter_idx] = named_param[1].data[conv_filter_idx]/named_param[1].data[conv_filter_idx].abs().max()
+                        else:
+                            named_param[1].data = named_param[1].data/named_param[1].data.abs().max()
+                    else:
+                        named_param[1].data = named_param[1].data/named_param[1].data.abs().max()
+
+    def init_single_train(self):
+        """
+            Initialize the dataloaders, models and optimizers for a single train
+        """
+        #======================================================================#
+        #================ Initialization Model and data loader ================#
+        #======================================================================#
+        # Creating the dataloaders
+        self.dataloadersCreation()
+
+        # Creating the model
+        self.modelCreation()
+
+        # Initializing weights
+        # self.model.apply(weights_init)
+
+        # Loading the weights of the trained models
+        self.load_weights_model()
+
+        #======================================================================#
+        #========= Initialization Quantization Params and optimizers =========#
+        #======================================================================#
+        # Group of parameters
+        params = self.get_params_groups_quantization()
+
+        # Optimizer for the model parameters
+        self.createOptimizer(params)
+
+    def countNonZeroWeights(self, model, quantizedLayers=False):
+        """
+            Count the number of non zero parameters in the model
+            Arguments:
+            ----------
+            model: torch model
+                Model from which we want to count the weights.
+            quantizedLayers: boolean
+                True if want to count the non zero weights of the weights to
+                quantize.
+        """
+        nonzero = 0
+        for name, param in model.named_parameters():
+            if (not self.countNonZeroParamsQuantizedLayers):
+                nonzero += torch.count_nonzero(param)
+            else:
+                # Params quantize
+                if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','mnistvitcnn']):
+                    if ('conv' in name) and ('bias' not in name):
+                        nonzero += torch.count_nonzero(param)
+                elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
+                    if ('conv' in name) and ('bias' not in name):
+                        nonzero += torch.count_nonzero(param)
+
+                elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
+                    if (('conv2' in name) and ('bias' not in name)) or ('transformer' in name and 'linear2.weight' in name):
+                        nonzero += torch.count_nonzero(param)
+                elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
+                    # Convolutions + FC layer
+                    if (('conv' in name) or ('fc' in name)) and ('bias' not in name):
+                        nonzero += torch.count_nonzero(param)
+                elif self.model_to_use.lower() == 'mnistvit':
+                    # All transformer parameters except patch embedding
+                    if ('transformer_encoder' in name):
+                        nonzero += torch.count_nonzero(param)
+                else:
+                    raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
+        return nonzero
+
+    def get_nb_params_to_quantize(self):
+        nb_params_to_quantize = 0
+        nb_total_params = 0
+        for n, p in self.model.named_parameters():
+            # Nb params layer
+            nb_params_layer = 1
+            for val in p.shape:
+                nb_params_layer *= val
+            # Nb params quantize
+            if (self.model_to_use.lower() in ['mnistvitcnn','mnist2dcnn','fmnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
+                if ('conv' in n) and ('bias' not in n):
+                    nb_params_to_quantize += nb_params_layer
+            elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
+                 if (('conv2' in n) and ('bias' not in n)) or ('transformer' in n and 'linear2.weight' in n):
+                     nb_params_to_quantize += nb_params_layer
+            elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
+                # Convolutions + FC layer
+                if (('conv' in n) or ('fc' in n)) and ('bias' not in n):
+                    nb_params_to_quantize += nb_params_layer
+            elif self.model_to_use.lower() == 'mnistvit':
+                # All transformer parameters except patch embedding
+                if  ('transformer_encoder' in n ) and ('norm' not in n) and ('weight' in n) and ('bias' not in n):
+                    nb_params_to_quantize += nb_params_layer
+            else:
+                raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
+            # Nb tot params
+            nb_total_params += nb_params_layer
+        return nb_total_params, nb_params_to_quantize
+
+
+    def holdout_train(self):
+        """
+            Does a holdout training repeated self.nb_repetitions times
+        """
+        repetitionsResults = {}
+        for nb_repetition in range(self.nb_repetitions):
+            print("\n\n=======> Repetitions {} <=======".format(nb_repetition))
+            # Get pre-trained model
+            print(f"Self.trained_fp_models_files = {self.trained_fp_models_files}")
+            self.model_weights_file = self.trained_fp_models_files[nb_repetition]
+
+            # Doing single train
+            tmp_results = self.single_train()
+            repetitionsResults[nb_repetition] = tmp_results
+
+
+            # Sparsity rate
+            nb_total_params, nb_params_to_quantize = self.get_nb_params_to_quantize()
+            if (not self.countNonZeroParamsQuantizedLayers):
+                sparsity_rate = (nb_total_params-self.non_zero_params)/nb_params_to_quantize
+            else:
+                print('!!!!Counting the non zero parameters of ONLY THE LAYERS TO QUANTIZE ({} params to quantize)'.format(nb_params_to_quantize))
+                sparsity_rate = 1-(self.non_zero_params/nb_params_to_quantize)
+            repetitionsResults[nb_repetition]['SparsityRate'] = sparsity_rate.detach().cpu().numpy()
+            print("\n\n=======> For repetition {} we have an sparsity rate of {}\n\n".format(nb_repetition, sparsity_rate))
+
+            # Parameters of the model
+            print("\n\n\n\n")
+            for named_param in self.model.named_parameters():
+                print('Param: {}\n\t{}'.format(named_param[0], named_param[1]))
+            print("\n\n\n\n")
+
+            # Saving the final model and the results
+            # Model
+            torch.save({
+                            'model_state_dict': self.best_model.state_dict(),
+                            'model': self.best_model
+                        }, self.results_folder + '/model/final_model-{}_rep-{}.pth'.format(self.exp_id, nb_repetition))
+            # Results
+            with open(self.results_folder + '/metrics/results_exp-{}_rep-{}.pth'.format(self.exp_id, nb_repetition), "wb") as fp:   #Pickling
+                pickle.dump(tmp_results, fp)
+
+        # Saving the results of the different repetitions
+        with open(self.results_folder + '/metrics/final_results_all_repetitions.pth', "wb") as fp:   #Pickling
+            pickle.dump(repetitionsResults, fp)
+        for rep_key in repetitionsResults.keys():
+            for e_key in repetitionsResults[rep_key].keys():
+
+                print(f"==== [{rep_key}] key : ", e_key )
+                print(f"==== [{rep_key}] val : ",repetitionsResults[rep_key][e_key])
+
+#==============================================================================#
+#================================ Main Function ================================#
+#==============================================================================#
+def main():
+    print("\n\n==================== Beginning of the experiment ====================\n\n")
+    #==========================================================================#
+    # Fixing the random seed
+    seed = 1
+    # seed = 42
+    random.seed(seed) # For reproducibility purposes
+    np.random.seed(seed) # For reproducibility purposes
+    torch.manual_seed(seed) # For reproducibility purposes
+    if torch.cuda.is_available(): # For reproducibility purposes
+        torch.cuda.manual_seed_all(seed)
+
+    #==========================================================================#
+    # Construct the argument parser
+    ap = argparse.ArgumentParser()
+    # Add the arguments to the parser
+    default_parameters_file = "./parameters_files/MNIST/mnist_TTQ.json"
+    ap.add_argument('--parameters_file', default=default_parameters_file, help="Parameters for the experiment", type=str)
+    args = vars(ap.parse_args())
+
+    # Getting the value of the arguments
+    parameters_file = args['parameters_file']
+    with open(parameters_file) as jf:
+        parameters_exp = json.load(jf)
+
+    # Grid search parameter in the parameters file
+    if ('doGridSearch' not in parameters_exp):
+        parameters_exp['doGridSearch'] = False
+    doGridSearch = parameters_exp['doGridSearch']
+
+    #==========================================================================#
+    # Creating an instance of the experiment
+    exp = Experiment(parameters_exp)
+
+    # Creating directory to save the results
+    inc = 0
+    current_datetime = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
+    resultsFolder = './results/' + parameters_exp['exp_id'] + '_OW' 
+    while (os.path.isdir(resultsFolder+ '_' + str(inc))):
+        inc += 1
+    resultsFolder = resultsFolder + '_' + str(inc)
+    os.mkdir(resultsFolder)
+    exp.setResultsFolder(resultsFolder)
+    print("===> Saving the results of the experiment in {}".format(resultsFolder))
+    # Creating directories for the trained models, the training and testing metrics
+    # and the parameters of the model (i.e. the training parameters and the network
+    # architecture)
+    if (not doGridSearch):
+        os.mkdir(resultsFolder + '/model/')
+        os.mkdir(resultsFolder + '/metrics/')
+    os.mkdir(resultsFolder + '/params_exp/')
+
+    # Normalizing the dataset
+    exp.compute_dataset_mean_std()
+    exp.normalize_dataset()
+
+    # Balancing the classes
+    exp.balance_classes_loss()
+
+    # Saving the training parameters in the folder of the results
+    inc = 0
+    parameters_file = resultsFolder + '/params_exp/params_beginning' + '_'
+    while (os.path.isfile(parameters_file + str(inc) + '.pth')):
+        inc += 1
+    parameters_file = parameters_file + str(inc) +'.pth'
+    parameters_exp['audio_feature_shape'] = exp.audio_feature_shape
+    with open(parameters_file, "wb") as fp:   #Pickling
+        pickle.dump(parameters_exp, fp)
+
+    # Evalauting the method
+    if (not doGridSearch):
+        # Doing holdout evaluation
+        exp.holdout_train()
+    else:
+        # Doing grid search
+        exp.gridSearch()
+    # Saving the training parameters in the folder of the results
+    inc = 0
+    parameters_file = resultsFolder + '/params_exp/params' + '_'
+    while (os.path.isfile(parameters_file + str(inc) + '.pth')):
+        inc += 1
+    parameters_file = parameters_file + str(inc) +'.pth'
+    parameters_exp['audio_feature_shape'] = exp.audio_feature_shape
+    with open(parameters_file, "wb") as fp:   #Pickling
+        pickle.dump(parameters_exp, fp)
+
+    # Saving the python file containing the network architecture
+    if (parameters_exp['model_type'].lower() == '2dcnn'):
+        if (parameters_exp['model_to_use'].lower() == 'timefrequency2dcnn'):
+            shutil.copy2('./src/Models/CNNs/time_frequency_simple_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'mnist2dcnn'):
+            shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'mnistvitcnn'):
+            shutil.copy2('./src/Models/CNNs/vitcnn.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
+            shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar10resnet50','stl10resnet50']):
+            shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
+            shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')          
+        elif (parameters_exp['model_to_use'].lower() == 'fmnistinceptionv4'):
+            shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')   
+        elif (parameters_exp['model_to_use'].lower() == 'kmnistdensenet'):
+            shutil.copy2('./src/Models/CNNs/densenet.py', resultsFolder + '/params_exp/network_architecture.py')
+        else:
+            raise ValueError('2D CNN {} is not valid'.format(parameters_exp['model_to_use']))
+    elif (parameters_exp['model_type'].lower() == 'vit'):
+        if (parameters_exp['model_to_use'].lower() == 'mnistvit'):
+            shutil.copy2('./src/Models/Transformers/mnist_vit.py', resultsFolder + '/params_exp/network_architecture.py')
+    elif (parameters_exp['model_type'].lower() == 'transformer'):
+        if (parameters_exp['model_to_use'].lower() == 'rawaudiomultichannelcnn'):
+            shutil.copy2('./src/Models/Transformers/Transformer_Encoder_RawAudioMultiChannelCNN.py', resultsFolder + '/params_exp/network_architecture.py')
+        else:
+            raise ValueError("Transformer type {} is not valid".format(parameters_exp['model_to_use']))
+    else:
+        raise ValueError("Model type {} is not valid".format(parameters_exp['model_type']))
+    #==========================================================================#
+    print("\n\n==================== End of the experiment ====================\n\n")
+
+
+
+if __name__=="__main__":
+    main()

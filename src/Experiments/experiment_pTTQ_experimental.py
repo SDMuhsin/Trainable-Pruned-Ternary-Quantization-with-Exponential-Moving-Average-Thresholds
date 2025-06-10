@@ -40,7 +40,7 @@ from labml_nn.optimizers import noam
 from src.Experiments.experiment_TTQ import Experiment as ExperimentTTQ
 
 from src.utils.GCE import GeneralizedCrossEntropy
-from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi,pruning_function_pTTQ_experimental,pruning_function_pTTQ_experimental_learned
+from src.utils.model_compression import approx_weights, approx_weights_fc, pruning_function_pTTQ, pruning_function_asymmetric_manessi,pruning_function_pTTQ_experimental, pruning_function_pTTQ_experimental_v2,pruning_function_pTTQ_experimental_learned
 
 
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN # Network used for training
@@ -125,6 +125,8 @@ class Experiment(ExperimentTTQ):
             self.pruning_function = pruning_function_asymmetric_manessi
         elif (self.pruning_function_type.lower() == 'experimental'):
             self.pruning_function = pruning_function_pTTQ_experimental
+        elif (self.pruning_function_type.lower() == 'experimental_v2'):
+            self.pruning_function = pruning_function_pTTQ_experimental_v2
         elif (self.pruning_function_type.lower() == 'experimental_learned'):
             self.pruning_function = pruning_function_pTTQ_experimental_learned
         else:
@@ -224,7 +226,154 @@ class Experiment(ExperimentTTQ):
             # Grads of alpha
             grad_alpha = (self.b*(kernel-self.b)*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))\
                         + self.a*(kernel+self.a)*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))).sum()
+        elif self.pruning_function_type == 'experimental_v2':
+            # --- Parameters from the pruning function's forward pass ---
+            # self.a is t_min_factor, self.b is t_max_factor
+            # self.alpha is the steepness parameter
+            # k_value is the 'k' tempering factor from the pruning function
+            # beta_value is the 'beta' for EMA from the pruning function
 
+            # 1. Determine current_x_mean_for_ema and current_x_std_for_ema
+            #    (as done in the forward pass of experimental_v2 based on kernel.ndim)
+            if kernel.ndim == 2:
+                _mean_stat = kernel.mean(dim=1).mean()
+                _std_stat = kernel.std(dim=1).mean()
+                # Add NaN handling for _std_stat as in the pruning function
+                if torch.isnan(_std_stat) or _std_stat.item() == 0:
+                     if _std_stat.item() != 0: # Was NaN
+                         _mean_stat = kernel.mean() # Fallback for mean if std was NaN
+                         _std_stat = kernel.std()
+                if torch.isnan(_std_stat): _std_stat = torch.tensor(0.0, device=kernel.device)
+            else:
+                _mean_stat = kernel.mean()
+                _std_stat = kernel.std()
+            
+            current_x_std_for_factors = _std_stat # This is the 'std' that self.a and self.b multiply
+
+            # 2. Get the actual EMA delta values used in pruning (after k scaling)
+            #    These must have been computed and stored or be accessible from the pruning function object.
+            #    Let's assume they are available (e.g., from self.ema_delta_min_val, self.ema_delta_max_val 
+            #    which would be k * pruning_function_pTTQ_experimental.ema_min, etc.)
+            #    Or, more directly, get the EMA values and k:
+            
+            # k_value = self.parameters_exp.get('pruning_k_factor', 1) # Get k from experiment params
+            # beta_value = self.parameters_exp.get('pruning_beta_ema', 0.9) # Get beta
+            # For illustration, assume these are attributes or correctly fetched:
+            # actual_k_val = self.k_val 
+            # actual_beta_val = self.beta_val
+            # actual_ema_min = pruning_function_pTTQ_experimental.ema_min
+            # actual_ema_max = pruning_function_pTTQ_experimental.ema_max
+
+            # For this example, let's assume you have access to the k, beta, and ema values used in the forward pass
+            # For simplicity in this snippet, we'll just denote them:
+            k_factor_from_forward = self.k # ... value of k used in forward pass ...
+            beta_from_forward = self.beta # ... value of beta used in forward pass ...
+            ema_min_from_forward = pruning_function_pTTQ_experimental.ema_min # Accessing the function's state
+            ema_max_from_forward = pruning_function_pTTQ_experimental.ema_max
+
+            eff_delta_min_in_pruning_formula = k_factor_from_forward * ema_min_from_forward
+            eff_delta_max_in_pruning_formula = k_factor_from_forward * ema_max_from_forward
+
+            # 3. Calculate gradients for self.a (t_min_factor) and self.b (t_max_factor)
+            #    The structure is similar to your first block, but:
+            #    - Replace `kernel_std` with `current_x_std_for_factors`.
+            #    - Replace `delta_min` and `delta_max` in the formulas with 
+            #      `eff_delta_min_in_pruning_formula` and `eff_delta_max_in_pruning_formula`.
+            #    - Scale the entire sum by (1 - beta_from_forward) because self.a/self.b affect EMA via current sample.
+            #    - Also scale by k_factor_from_forward because d(k*EMA)/d(current_sample) = k*(1-beta)
+
+            # grad_a = (dL/dP * dP/d(eff_delta_min)) * k_factor * (1-beta) * sign(mean + a*std_for_factors) * std_for_factors
+            # Your original grad_a formula for pTTQ effectively computes:
+            # sum_elements [ (dL/dOutput_elem) * (dOutput_elem / d_factor_a) ]
+            # where dOutput_elem/d_factor_a has kernel_std in it.
+
+            # Adapting your formula structure for grad_a:
+            # Note: The derivative terms should be with respect to eff_delta_min and eff_delta_max
+            # The `kernel_std` multiplier in your original formula comes from d(delta_min)/da = std * sign(...)
+            # So that should be `current_x_std_for_factors`
+            
+            # Term related to dP/d(eff_delta_min) multiplied by d(eff_delta_min)/da parts
+            # This matches the form of the first block's grad_a calculation,
+            # if delta_min there is replaced by eff_delta_min_in_pruning_formula
+            # and kernel_std by current_x_std_for_factors.
+            
+            # Partial derivative of Loss w.r.t factor 'a' (t_min_factor)
+            # Sum over elements of ( (dL/dRes_elem) * (dRes_elem / da) )
+            # dRes_elem / da = (dRes_elem / d(eff_delta_min)) * (d(eff_delta_min) / da)
+            # d(eff_delta_min) / da = k_factor * (1-beta) * sign(mean_stat + a*std_stat) * std_stat
+            
+            # Your original formula for grad_a calculates sum( (dL/dRes_elem) * (dRes_elem/d_eff_thresh_param_a))
+            # where dRes_elem/d_eff_thresh_param_a has structure like:
+            # std_factor * [ heaviside_term - sigmoid_term + combined_term ]
+
+            grad_a_component_sum = (
+                # Note: `eff_delta_min_in_pruning_formula` is used inside the sigmoid/heaviside
+                current_x_std_for_factors * torch.heaviside((-kernel - eff_delta_min_in_pruning_formula), torch.tensor([0.0], device=kernel.device))
+                - current_x_std_for_factors * torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula))
+                + current_x_std_for_factors * eff_delta_min_in_pruning_formula * self.alpha * torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)))
+            ).sum() # This sum needs to be multiplied by dL/dRes and the sign term from d|...|/da
+
+            # This part of your provided code for grad_a is complex and seems to be a direct sum of dL/da components.
+            # To adapt it correctly, each instance of 'kernel_std' becomes 'current_x_std_for_factors'
+            # and 'delta_min' becomes 'eff_delta_min_in_pruning_formula'.
+            # Then, the result needs scaling by (1 - beta_from_forward). The k_factor is already part of eff_delta.
+
+            # Let's assume self.a and self.b are the learnable parameters t_min and t_max for the pruning function
+            # Let k_val and beta_val be the k and beta values used in the pruning function
+
+            # Calculate delta_min_sample and delta_max_sample (non-EMA, non-abs, non-k version for derivative of abs)
+            _delta_min_inner = _mean_stat + self.a * current_x_std_for_factors
+            _delta_max_inner = _mean_stat + self.b * current_x_std_for_factors
+
+            # Sign terms for the derivative of abs()
+            _sign_min = torch.sign(_delta_min_inner)
+            _sign_max = torch.sign(_delta_max_inner)
+            
+            # dL/d(eff_delta_min) parts:
+            # Let g_res_eff_delta_min be Sum_elements [ (dL/dRes_elem) * (dRes_elem / d(eff_delta_min)) ]
+            # Structure from first block: -(Heaviside) - Sigmoid + Delta*Alpha*Sig*(1-Sig) for negative side
+            # (dL/dRes * dRes/d(eff_delta_min)) part related to negative weights:
+            neg_contrib_to_grad_eff_delta_min = (
+                -torch.heaviside((-kernel - eff_delta_min_in_pruning_formula), torch.tensor([0.0], device=kernel.device)) # dRelu(-x-D)/dD = -H(-x-D)*(-1) = H
+                -torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)) # from -D*sig(alpha*(-x-D)) -> -sig - D*sig'*alpha*(-1)
+                + eff_delta_min_in_pruning_formula * self.alpha * torch.sigmoid(self.alpha*(-kernel-eff_delta_min_in_pruning_formula)) * (1-torch.sigmoid(self.alpha*(-kernel-eff_delta_min_in_pruning_formula)))
+            ).sum() # This is a sum of dP/d(eff_delta_min) terms (assuming dL/dP is 1 or incorporated later)
+
+            # grad_a = neg_contrib_to_grad_eff_delta_min * k_factor_from_forward * (1-beta_from_forward) * _sign_min * current_x_std_for_factors
+            # This interpretation might be too simplistic. The original grad_a formula is likely already dL/da directly.
+
+            # If the original grad_a formula is Sum(dL/dself.a), then we modify it:
+            grad_a = (
+                current_x_std_for_factors * _sign_min * ( # from d|inner|/da = sign(inner)*std
+                    -torch.heaviside((-kernel - eff_delta_min_in_pruning_formula), torch.tensor([0.0], device=kernel.device)) # d(P)/d(eff_delta_min) components
+                    -torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula))
+                    + eff_delta_min_in_pruning_formula * self.alpha * torch.sigmoid(self.alpha*(-kernel-eff_delta_min_in_pruning_formula))*(1-torch.sigmoid(self.alpha*(-kernel-eff_delta_min_in_pruning_formula)))
+                )
+            ).sum() * k_factor_from_forward * (1-beta_from_forward) # Chain rule through k and EMA
+
+            grad_b = (
+                current_x_std_for_factors * _sign_max * ( # from d|inner|/db = sign(inner)*std
+                    torch.heaviside((kernel - eff_delta_max_in_pruning_formula), torch.tensor([0.0], device=kernel.device)) # d(P)/d(eff_delta_max) components
+                    +torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula))
+                    - eff_delta_max_in_pruning_formula * self.alpha * torch.sigmoid(self.alpha*(kernel-eff_delta_max_in_pruning_formula))*(1-torch.sigmoid(self.alpha*(kernel-eff_delta_max_in_pruning_formula)))
+                )
+            ).sum() * k_factor_from_forward * (1-beta_from_forward)
+
+            # Grad of alpha (steepness) - alpha directly affects the sigmoid terms with eff_deltas
+            # It doesn't pass through the EMA factor (1-beta) unless alpha itself is from an EMA.
+            # So, use eff_delta_min_in_pruning_formula and eff_delta_max_in_pruning_formula
+            grad_alpha = (
+                eff_delta_max_in_pruning_formula * (kernel - eff_delta_max_in_pruning_formula) * torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula))) +
+                eff_delta_min_in_pruning_formula * (kernel + eff_delta_min_in_pruning_formula) * torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula))) # Mistake in original: kernel + delta_min for the argument to sigmoid's derivative, but it should be -kernel-delta_min
+                                                                                                                                                                                                                                                                    # Corrected based on d/d(alpha) of [ D_max * sig(alpha*(x-D_max)) - D_min * sig(alpha*(-x-D_min)) ]
+            ).sum()
+            # Corrected grad_alpha from derivation of P = A + D_max*sig(alpha*u1) - B - D_min*sig(alpha*u2)
+            # dP/dalpha = D_max * sig'(alpha*u1)*u1 - D_min * sig'(alpha*u2)*u2
+            # u1 = x - D_max, u2 = -x - D_min
+            grad_alpha = (
+                eff_delta_max_in_pruning_formula * (kernel - eff_delta_max_in_pruning_formula) * torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula)))
+                - eff_delta_min_in_pruning_formula * (-kernel - eff_delta_min_in_pruning_formula) * torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)))
+            ).sum()
 
         else:
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
