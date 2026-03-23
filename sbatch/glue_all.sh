@@ -43,8 +43,8 @@ mkdir -p ./logs ./results
 # CONFIGURATION
 # ============================================================================
 
-tasks=("cola" "mrpc" "rte" "stsb" "sst2" "qnli")
-k_values=("0.5" "1.0" "1.2")
+tasks=("cola") # "mrpc" "rte" "stsb" "sst2" "qnli")
+k_values=("0.5") # "1.0" "1.2")
 
 # Stable hyperparameters (validated on CoLA and MRPC)
 WARMUP_EPOCHS=2
@@ -173,7 +173,7 @@ for task in "${tasks[@]}"; do
         "FP $task ${FP_EPOCHS}ep"
 done
 echo ""
-
+exit 1
 # ============================================================================
 # TTQ (6 jobs)
 # ============================================================================
