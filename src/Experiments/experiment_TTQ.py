@@ -40,7 +40,7 @@ from labml_nn.optimizers import noam
 from src.Experiments.train_model_base import Experiment as ExperimentBase
 
 from src.utils.GCE import GeneralizedCrossEntropy
-from src.utils.model_compression import approx_weights, approx_weights_fc, get_params_groups_to_quantize
+from src.utils.model_compression import approx_weights, approx_weights_fc, get_params_groups_to_quantize, pruning_function_pTTQ_experimental
 from src.utils.download_exp_data import download_FP_models
 
 from src.Models.CNNs.mnist_CNN import weights_init
@@ -133,7 +133,8 @@ class Experiment(ExperimentBase):
 
     def get_params_groups_quantization(self):
         # Getting the groups of parameters to quantize
-        params, self.names_params_to_be_quantized = get_params_groups_to_quantize(self.model, self.model_to_use)
+        quantize_fc = self.parameters_exp.get('quantize_fc', False)
+        params, self.names_params_to_be_quantized = get_params_groups_to_quantize(self.model, self.model_to_use, quantize_fc=quantize_fc)
         return params
 
     def load_weights_model(self):
@@ -236,10 +237,14 @@ class Experiment(ExperimentBase):
         kernels_to_quantize = [kernel for kernel in model_params_dict['ToQuantize']['params']]
 
         # Initial Quantization
-        for k, k_fp in zip(kernels_to_quantize, kernels_to_quantize_fp_copy):
+        for layer_idx, (k, k_fp) in enumerate(zip(kernels_to_quantize, kernels_to_quantize_fp_copy)):
             # Getting the initial scaling factors
             w_p_initial, w_n_initial = self.initial_scales(k_fp.data)
             initial_scaling_factors += [(w_p_initial, w_n_initial)]
+
+            # Set current layer id for EMA-based pruning functions
+            if hasattr(self, '_current_layer_id'):
+                self._current_layer_id = layer_idx
 
             # Doing quantization
             k.data = self.quantize(k_fp.data, w_p_initial, w_n_initial) # REVERT
@@ -350,6 +355,10 @@ class Experiment(ExperimentBase):
         """
             Initialize the dataloaders, models and optimizers for a single train
         """
+        # Reset EMA state for pruning functions between repetitions
+        if hasattr(pruning_function_pTTQ_experimental, 'ema_states'):
+            del pruning_function_pTTQ_experimental.ema_states
+
         #======================================================================#
         #================ Initialization Model and data loader ================#
         #======================================================================#
@@ -390,27 +399,8 @@ class Experiment(ExperimentBase):
             if (not self.countNonZeroParamsQuantizedLayers):
                 nonzero += torch.count_nonzero(param)
             else:
-                # Params quantize
-                if (self.model_to_use.lower() in ['mnist2dcnn','fmnist2dcnn','mnistvitcnn']):
-                    if ('conv' in name) and ('bias' not in name):
-                        nonzero += torch.count_nonzero(param)
-                elif (self.model_to_use.lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
-                    if ('conv' in name) and ('bias' not in name):
-                        nonzero += torch.count_nonzero(param)
-
-                elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
-                    if (('conv2' in name) and ('bias' not in name)) or ('transformer' in name and 'linear2.weight' in name):
-                        nonzero += torch.count_nonzero(param)
-                elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
-                    # Convolutions + FC layer
-                    if (('conv' in name) or ('fc' in name)) and ('bias' not in name):
-                        nonzero += torch.count_nonzero(param)
-                elif self.model_to_use.lower() == 'mnistvit':
-                    # All transformer parameters except patch embedding
-                    if ('transformer_encoder' in name):
-                        nonzero += torch.count_nonzero(param)
-                else:
-                    raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
+                if name in self.names_params_to_be_quantized:
+                    nonzero += torch.count_nonzero(param)
         return nonzero
 
     def get_nb_params_to_quantize(self):
@@ -422,22 +412,8 @@ class Experiment(ExperimentBase):
             for val in p.shape:
                 nb_params_layer *= val
             # Nb params quantize
-            if (self.model_to_use.lower() in ['mnistvitcnn','mnist2dcnn','fmnist2dcnn','kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18','cifar10resnet50','cifar100resnet50','stl10resnet50','fmnistenet','kmnistdensenet','fmnistinceptionv4']):
-                if ('conv' in n) and ('bias' not in n):
-                    nb_params_to_quantize += nb_params_layer
-            elif (self.model_to_use.lower() == 'rawaudiomultichannelcnn'):
-                 if (('conv2' in n) and ('bias' not in n)) or ('transformer' in n and 'linear2.weight' in n):
-                     nb_params_to_quantize += nb_params_layer
-            elif (self.model_to_use.lower() == 'timefrequency2dcnn'):
-                # Convolutions + FC layer
-                if (('conv' in n) or ('fc' in n)) and ('bias' not in n):
-                    nb_params_to_quantize += nb_params_layer
-            elif self.model_to_use.lower() == 'mnistvit':
-                # All transformer parameters except patch embedding
-                if  ('transformer_encoder' in n ) and ('norm' not in n) and ('weight' in n) and ('bias' not in n):
-                    nb_params_to_quantize += nb_params_layer
-            else:
-                raise ValueError("It is not possible to get the number of parameters to quantize for model {}".format(self.model_to_use))
+            if n in self.names_params_to_be_quantized:
+                nb_params_to_quantize += nb_params_layer
             # Nb tot params
             nb_total_params += nb_params_layer
         return nb_total_params, nb_params_to_quantize
@@ -593,8 +569,10 @@ def main():
             shutil.copy2('./src/Models/CNNs/vitcnn.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
-        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar10resnet50','stl10resnet50']):
+        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext']):
+            shutil.copy2('./src/Models/CNNs/convnext.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
             shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')          
         elif (parameters_exp['model_to_use'].lower() == 'fmnistinceptionv4'):

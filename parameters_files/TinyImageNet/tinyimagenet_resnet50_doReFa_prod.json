@@ -1,21 +1,21 @@
 {
-    "exp_id": "CameraReady_MNIST_2D_CNN_FP",
+    "exp_id": "PROD_TinyImageNet_RESNET50_DoReFa",
     "lr": 0.001,
-    "nb_repetitions": 2,
+    "nb_repetitions": 1,
     "batch_size_train": 32,
     "batch_size_test": 32,
     "weight_decay": 0,
-    "nb_epochs": 10,
+    "nb_epochs": 50,
     "loss_function": "CE",
+    "trained_fp_models_folder": "./results/PROD_TinyImageNet_RESNET50_FP_OW_0/model/",
     "model_type": "2DCNN",
-    "model_to_use": "Mnist2DCnn",
+    "model_to_use": "tinyimagenetresnet50",
     "do_normalization_weights": false,
     "device": "cuda",
-    "use_soft_labels": false,
     "balance_dataset": false,
     "compute_class_weights": false,
     "separate_val_ds": false,
-    "dataset_type": "MNIST",
+    "dataset_type": "TinyImageNet",
     "percentage_samples_keep": 1,
-    "dataset_folder": "./data/MNIST/"
+    "dataset_folder": "./data/TinyImageNet/"
 }

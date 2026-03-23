@@ -147,6 +147,8 @@ class Experiment(ExperimentTTQ):
         # Parameters of the exp
         self.parameters_exp = parameters_exp
 
+        # Per-layer tracking for EMA pruning functions
+        self._current_layer_id = 0
 
     # Quantization function
     def quantize(self, kernel, w_p, w_n):
@@ -159,9 +161,15 @@ class Experiment(ExperimentTTQ):
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
         """
         # Getting the pruned kernel
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta)
-        A = (pruned_kernel > 0).float()
-        B = (pruned_kernel < 0).float()
+        if self.pruning_function_type == 'experimental':
+            pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta, layer_id=self._current_layer_id)
+        else:
+            pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta)
+        # Use epsilon threshold for ternary assignment to handle sigmoid leakage
+        # (when EMA thresholds are small, sigmoid never reaches exact float32 zero)
+        eps = 1e-6
+        A = (pruned_kernel > eps).float()
+        B = (pruned_kernel < -eps).float()
         return w_p*A + (-w_n*B)
 
     # Gradients computation
@@ -183,49 +191,61 @@ class Experiment(ExperimentTTQ):
             6. gradient for alpha
         """
         # Grads of w_p and w_n
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta)
-        A = (pruned_kernel > 0).float()
-        B = (pruned_kernel < 0).float()
+        if self.pruning_function_type == 'experimental':
+            pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta, layer_id=self._current_layer_id)
+        else:
+            pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b, self.k, self.beta)
+        # Use epsilon threshold for ternary assignment to handle sigmoid leakage
+        eps = 1e-6
+        A = (pruned_kernel > eps).float()
+        B = (pruned_kernel < -eps).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
         grad_fp_kernel = w_p*A*kernel_grad + w_n*B*kernel_grad + 1.0*c*kernel_grad
         grad_wp = (A*kernel_grad).sum()
         grad_wn = (B*kernel_grad).sum()
 
         # Grads
+        # NOTE: All threshold/alpha gradients are modulated by kernel_grad (loss gradient)
+        # via straight-through estimation. Without this, dP/da is always >= 0, causing
+        # thresholds to monotonically decrease and sparsity to collapse.
         if (self.pruning_function_type in ['manessi_asymmetric_pTTQ','experimental']): # Both these use stats based thresholds
             # Grads of the thresholds hyperparameters
             kernel_mean, kernel_std = kernel.mean(), kernel.std()
             delta_min = (kernel_mean + self.a*kernel_std).abs()
             delta_max = (kernel_mean + self.b*kernel_std).abs()
-            grad_a = (
+            grad_a = (kernel_grad * (
                             kernel_std*torch.heaviside((-kernel-delta_min).float(),  torch.tensor([0]).float().to(self.device) )\
                             - kernel_std*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))\
                             + kernel_std*delta_min*self.alpha*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))
-                     ).sum()
-            grad_b = (
+                     )).sum()
+            grad_b = (kernel_grad * (
                             -kernel_std*torch.heaviside((kernel-delta_max).float(),  torch.tensor([0]).float().to(self.device) )\
                             + kernel_std*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))\
                             - kernel_std*delta_max*self.alpha*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))
-                     ).sum()
+                     )).sum()
             # Grads of alpha
-            grad_alpha = (delta_max*(kernel-delta_max)*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))\
-                        + delta_min*(kernel+delta_min)*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))).sum()
+            grad_alpha = (kernel_grad * (
+                        delta_max*(kernel-delta_max)*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))\
+                        + delta_min*(kernel+delta_min)*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))
+                        )).sum()
 
-        elif (self.pruning_function_type in ['manessi_asymmetric','experimental_learned']): # Both these use learnable thresholds 
-            # Grads of w_p and w_n
-            grad_a = (
+        elif (self.pruning_function_type in ['manessi_asymmetric','experimental_learned']): # Both these use learnable thresholds
+            # Grads of a and b (loss-modulated via kernel_grad)
+            grad_a = (kernel_grad * (
                         torch.heaviside((-kernel-self.a).float(),  torch.tensor([0]).float().to(self.device) )\
                         - torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))\
                         + self.a*self.alpha*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))
-                     ).sum()
-            grad_b = (
+                     )).sum()
+            grad_b = (kernel_grad * (
                         -torch.heaviside((kernel-self.b).float(),  torch.tensor([0]).float().to(self.device) )\
                         + torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))\
                         - self.b*self.alpha*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))
-                     ).sum()
+                     )).sum()
             # Grads of alpha
-            grad_alpha = (self.b*(kernel-self.b)*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))\
-                        + self.a*(kernel+self.a)*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))).sum()
+            grad_alpha = (kernel_grad * (
+                        self.b*(kernel-self.b)*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))\
+                        + self.a*(kernel+self.a)*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))
+                        )).sum()
         elif self.pruning_function_type == 'experimental_v2':
             # --- Parameters from the pruning function's forward pass ---
             # self.a is t_min_factor, self.b is t_max_factor
@@ -342,8 +362,8 @@ class Experiment(ExperimentTTQ):
             # grad_a = neg_contrib_to_grad_eff_delta_min * k_factor_from_forward * (1-beta_from_forward) * _sign_min * current_x_std_for_factors
             # This interpretation might be too simplistic. The original grad_a formula is likely already dL/da directly.
 
-            # If the original grad_a formula is Sum(dL/dself.a), then we modify it:
-            grad_a = (
+            # Loss-modulated gradients (multiplied by kernel_grad for STE)
+            grad_a = (kernel_grad *
                 current_x_std_for_factors * _sign_min * ( # from d|inner|/da = sign(inner)*std
                     -torch.heaviside((-kernel - eff_delta_min_in_pruning_formula), torch.tensor([0.0], device=kernel.device)) # d(P)/d(eff_delta_min) components
                     -torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula))
@@ -351,7 +371,7 @@ class Experiment(ExperimentTTQ):
                 )
             ).sum() * k_factor_from_forward * (1-beta_from_forward) # Chain rule through k and EMA
 
-            grad_b = (
+            grad_b = (kernel_grad *
                 current_x_std_for_factors * _sign_max * ( # from d|inner|/db = sign(inner)*std
                     torch.heaviside((kernel - eff_delta_max_in_pruning_formula), torch.tensor([0.0], device=kernel.device)) # d(P)/d(eff_delta_max) components
                     +torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula))
@@ -359,26 +379,49 @@ class Experiment(ExperimentTTQ):
                 )
             ).sum() * k_factor_from_forward * (1-beta_from_forward)
 
-            # Grad of alpha (steepness) - alpha directly affects the sigmoid terms with eff_deltas
-            # It doesn't pass through the EMA factor (1-beta) unless alpha itself is from an EMA.
-            # So, use eff_delta_min_in_pruning_formula and eff_delta_max_in_pruning_formula
-            grad_alpha = (
-                eff_delta_max_in_pruning_formula * (kernel - eff_delta_max_in_pruning_formula) * torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula))) +
-                eff_delta_min_in_pruning_formula * (kernel + eff_delta_min_in_pruning_formula) * torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula))) # Mistake in original: kernel + delta_min for the argument to sigmoid's derivative, but it should be -kernel-delta_min
-                                                                                                                                                                                                                                                                    # Corrected based on d/d(alpha) of [ D_max * sig(alpha*(x-D_max)) - D_min * sig(alpha*(-x-D_min)) ]
-            ).sum()
+            # Grad of alpha (steepness) - loss-modulated
             # Corrected grad_alpha from derivation of P = A + D_max*sig(alpha*u1) - B - D_min*sig(alpha*u2)
             # dP/dalpha = D_max * sig'(alpha*u1)*u1 - D_min * sig'(alpha*u2)*u2
             # u1 = x - D_max, u2 = -x - D_min
-            grad_alpha = (
+            grad_alpha = (kernel_grad * (
                 eff_delta_max_in_pruning_formula * (kernel - eff_delta_max_in_pruning_formula) * torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (kernel - eff_delta_max_in_pruning_formula)))
                 - eff_delta_min_in_pruning_formula * (-kernel - eff_delta_min_in_pruning_formula) * torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)) * (1 - torch.sigmoid(self.alpha * (-kernel - eff_delta_min_in_pruning_formula)))
-            ).sum()
+            )).sum()
 
         else:
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
 
         return grad_fp_kernel, grad_wp, grad_wn, grad_a, grad_b, grad_alpha
+
+    def initial_scales(self, kernel):
+        """
+        Compute initial scaling factors w_p and w_n from FP weight statistics.
+
+        With the default w_p=w_n=1.0, the quantized output magnitude is 3-6x larger
+        than the FP output. This is fine for architectures with BatchNorm after every
+        conv/linear (e.g., ResNet-50), because BN recomputes batch statistics during
+        training and auto-corrects the scale. But architectures without post-layer
+        normalization before skip connections (e.g., ConvNeXt) suffer catastrophic
+        scale mismatch that compounds across blocks.
+
+        Fix: Set w_p = mean of positive FP weights above threshold,
+             w_n = mean of |negative FP weights| below threshold.
+        This matches the quantized output scale to the FP output scale.
+        """
+        if not self.parameters_exp.get('smart_initial_scales', False):
+            return 1.0, 1.0
+
+        # Compute threshold using the same logic as pruning_function_pTTQ_experimental
+        k_mean, k_std = kernel.mean(), kernel.std()
+        delta = abs(k_mean + self.init_x * k_std)
+
+        pos_mask = kernel > delta
+        neg_mask = kernel < -delta
+
+        w_p = kernel[pos_mask].mean().item() if pos_mask.any() else 1.0
+        w_n = (-kernel[neg_mask]).mean().item() if neg_mask.any() else 1.0
+
+        return w_p, w_n
 
     def initial_alpha(self, kernel):
         return self.alpha
@@ -513,6 +556,9 @@ class Experiment(ExperimentTTQ):
             alphas = self.optimizer_alpha.param_groups[0]['params']
 
         for i in range(len(quantized_kernels)):
+            # Set current layer id for EMA-based pruning functions
+            self._current_layer_id = i
+
             # Current quantized kernel
             k = quantized_kernels[i]
 
@@ -587,6 +633,9 @@ class Experiment(ExperimentTTQ):
 
         # Quantize the updated full precision kernels
         for i in range(len(quantized_kernels)):
+            # Set current layer id for EMA-based pruning functions
+            self._current_layer_id = i
+
             # Current quantized kernel
             k = quantized_kernels[i]
 
@@ -606,6 +655,29 @@ class Experiment(ExperimentTTQ):
                 alpha_val = alphas[i]
                 self.alpha = alpha_val.data[0]
             k.data = self.quantize(k_fp.data, w_p, w_n)
+
+        # Diagnostic logging (every 100 steps)
+        if not hasattr(self, '_diag_step'):
+            self._diag_step = 0
+        self._diag_step += 1
+        if self._diag_step % 100 == 1:
+            print(f"\n--- DIAG step {self._diag_step} ---")
+            for i in range(len(quantized_kernels)):
+                k = quantized_kernels[i]
+                k_fp = fp_kernels[i]
+                f = scaling_factors[i]
+                t = thresholds[i]
+                total_elems = k.data.numel()
+                zero_elems = (k.data == 0).sum().item()
+                pos_elems = (k.data > 0).sum().item()
+                neg_elems = (k.data < 0).sum().item()
+                layer_name = self.names_params_to_be_quantized[i] if i < len(self.names_params_to_be_quantized) else f"layer_{i}"
+                print(f"  [{layer_name}] shape={list(k_fp.data.shape)} | "
+                      f"thresh a={t.data[0]:.6f} b={t.data[1]:.6f} | "
+                      f"scale wp={f.data[0]:.4f} wn={f.data[1]:.4f} | "
+                      f"FP range=[{k_fp.data.min():.4f}, {k_fp.data.max():.4f}] std={k_fp.data.std():.4f} | "
+                      f"sparsity={zero_elems/total_elems:.1%} (+{pos_elems} 0={zero_elems} -{neg_elems})")
+            print("--- end DIAG ---\n")
 
     def gridSearch(self):
         """
@@ -816,8 +888,10 @@ def main():
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
                 shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
-            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
-                shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')                
+            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
+                shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+            elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext']):
+                shutil.copy2('./src/Models/CNNs/convnext.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
                 shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'kmnistdensenet'):

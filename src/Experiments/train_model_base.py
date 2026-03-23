@@ -48,6 +48,7 @@ from src.DataManipulation.emnist_data import put_EMNIST_data_generic_form, EMNIS
 from src.DataManipulation.cifar10_data import put_CIFAR10_data_generic_form, CIFAR10DatasetWrapper
 from src.DataManipulation.cifar100_data import put_CIFAR100_data_generic_form, CIFAR100DatasetWrapper
 from src.DataManipulation.stl10_data import put_STL10_data_generic_form, STL10DatasetWrapper
+from src.DataManipulation.tinyimagenet_data import download_and_prepare_tinyimagenet, put_TinyImageNet_data_generic_form, TinyImageNetDatasetWrapper
 from src.DataManipulation.vocseg_data import put_PascalVOC_data_generic_form, PascalVOCDatasetWrapper
 
 from src.Models.CNNs.mnist_CNN import MnistClassificationModel, weights_init 
@@ -62,6 +63,7 @@ from src.Models.CNNs.inceptionv4 import InceptionV4ClassificationModel
 from src.Models.CNNs.time_frequency_simple_CNN import TimeFrequency2DCNN
 from src.Models.Transformers.Transformer_Encoder_RawAudioMultiChannelCNN import TransformerClassifierMultichannelCNN
 from src.Models.CNNs.vitcnn import HybridCNNViTModel
+from src.Models.CNNs.convnext import ConvNeXtTinyClassificationModel
 
 #==============================================================================#
 #======================== Defining the experiment class ========================#
@@ -704,6 +706,55 @@ class Experiment(object):
             self.test_ds = CIFAR100DatasetWrapper(data=self.testing_data)
 
 
+        elif (self.dataset_type.lower() == 'tinyimagenet'):
+            # Download and prepare Tiny-ImageNet (reorganizes into ImageFolder structure)
+            train_dir, val_dir = download_and_prepare_tinyimagenet(parameters_exp['dataset_folder'])
+
+            # Transformations to apply to the dataset
+            transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize((64, 64)),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2770, 0.2691, 0.2821))
+            ])
+
+            # Retrieving the training dataset
+            self.training_data = torchvision.datasets.ImageFolder(
+                root=train_dir,
+                transform=transform
+            )
+
+            # Keeping only a percentage of samples
+            print("Original number of training samples (TinyImageNet): {}".format(len(self.training_data)))
+            nb_samples_keep = int(self.percentage_samples_keep * len(self.training_data))
+            self.training_data = [self.training_data[i] for i in range(len(self.training_data)) if i < nb_samples_keep]
+            print('New number of training samples (TinyImageNet): {}'.format(len(self.training_data)))
+
+            # Putting the dataset under the right format
+            self.training_data = put_TinyImageNet_data_generic_form(self.training_data)
+
+            # Splitting the train data into train and validation
+            if (self.separate_val_ds):
+                train_val_splits = train_val_split_stratified(self.training_data, n_splits=1, test_size=0.2)[0]
+                self.training_data, self.val_data = train_val_splits['Train'], train_val_splits['Validation']
+
+            # Retrieving the test dataset (use val split as test)
+            self.testing_data = torchvision.datasets.ImageFolder(
+                root=val_dir,
+                transform=transform
+            )
+            self.testing_data = put_TinyImageNet_data_generic_form(self.testing_data)
+
+            # Balance training dataset
+            if (self.balance_dataset):
+                self.training_data, nb_samples_per_class = balance_dataset(self.training_data, dataset_type=self.dataset_type, balance_strategy=self.balance_strategy)
+                print("\nAFTER RESAMPLING we have {} training samples. Number of samples per class: {}".format(len(self.training_data), nb_samples_per_class))
+
+            # Creating the pytorch datasets
+            self.train_ds = TinyImageNetDatasetWrapper(data=self.training_data)
+            if (self.separate_val_ds):
+                self.val_ds = TinyImageNetDatasetWrapper(data=self.val_data)
+            self.test_ds = TinyImageNetDatasetWrapper(data=self.testing_data)
+
         elif (self.dataset_type.lower() == 'kmnist'):
 
             # Transformations to apply to the dataset
@@ -823,8 +874,8 @@ class Experiment(object):
             pass
         elif (self.dataset_type.lower() == 'kmnist'):
             pass
-        elif (self.dataset_type.lower() in ['svhn','emnist','cifar10','cifar100','stl10']):
-            pass        
+        elif (self.dataset_type.lower() in ['svhn','emnist','cifar10','cifar100','stl10','tinyimagenet']):
+            pass
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
         print("Number of samples in the training dataset: ", len(self.train_ds))
@@ -888,6 +939,10 @@ class Experiment(object):
             elif (self.model_to_use.lower() in ['cifar10resnet50','stl10resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=10)
 
+            elif (self.model_to_use.lower() in ['tinyimagenetresnet50']):
+                self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=200)
+            elif (self.model_to_use.lower() in ['tinyimagenetconvnext']):
+                self.model = ConvNeXtTinyClassificationModel(num_classes=200)
             elif (self.model_to_use.lower() in ['cifar100resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
             elif (self.model_to_use.lower() in ['cifar100resnet34']):
@@ -1505,8 +1560,10 @@ def main():
 
         elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
-        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
+        elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+        elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext']):
+            shutil.copy2('./src/Models/CNNs/convnext.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['stl10inceptionv4']):
             shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['cifar100resnet34']):

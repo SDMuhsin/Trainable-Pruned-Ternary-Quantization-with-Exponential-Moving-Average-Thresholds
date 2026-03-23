@@ -1,78 +1,206 @@
-# Pruned trained ternary quantization for medical signal classification models
+# EMA-pTTQ: Exponential Moving Average based Pruned Ternary Quantization
 
-## I) Introduction
+Repository for the paper _Extreme Compression of Neural Networks Using Exponential Moving Average based Pruned Ternary Quantization_, under revision at IEEE Transactions on Computers.
 
-GitHub repository for the sumbission of the paper *Extreme Compression of CNNs Using Exponential
-Moving Average based Pruned Ternary Quantization*, currently under review, TNNLS.
+## Method
 
-## II) Configuration
+EMA-pTTQ quantizes neural network weights to ternary values {-w\_n, 0, +w\_p}, where w\_p and w\_n are learned per-layer scaling factors and zeros represent pruned weights. The method extends pTTQ (Pruned Trained Ternary Quantization) with two contributions:
 
-To be able to run the different codes (Linux platforms), you need to start by running the following command:
+1. **EMA-smoothed pruning thresholds.** Rather than computing pruning thresholds from instantaneous weight statistics (which fluctuate between optimization steps), EMA-pTTQ maintains exponential moving averages of the statistics. This stabilizes the pruning boundary and produces more consistent sparsity patterns during training.
 
-    export PYTHONPATH="${PYTHONPATH}:path_to_code"
+2. **Tunable pruning aggressiveness.** A parameter _k_ scales the pruning threshold, giving direct control over the sparsity-accuracy tradeoff without retraining threshold parameters.
 
-Then, you should install the different libraries needed to execute the different codes:
+The quantization pipeline proceeds in four stages per layer:
 
-    pip install -r requirements.txt
+![EMA-pTTQ quantization flow](pttq_ema_flow.png)
 
-## III) Proposed method
+- **Normalization:** Full-precision weights are centered and scaled using running statistics.
+- **Pruning:** Weights within the EMA-smoothed threshold band [-delta, +delta] are zeroed. The thresholds are parameterized as delta = k * EMA(|mu + a * sigma|), where _a_ is a learnable parameter, _mu_ and _sigma_ are the layer's weight statistics, and the EMA decay factor _beta_ controls smoothing.
+- **Ternarization:** Surviving positive weights become +1, negative weights become -1.
+- **Scaling:** Two learned full-precision factors (w\_p for positive, w\_n for negative) are applied.
 
-![image](https://github.com/SDMuhsin/Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds/blob/main/pttq_ema_flow.png) 
+All parameters (w\_p, w\_n, _a_, and the full-precision weight copies) are trained end-to-end using the Straight-Through Estimator (STE) for gradient propagation through the discrete quantization.
 
-Our proposed method is a modification of [pTTQ](https://www.sciencedirect.com/science/article/pii/S0925231224009871) , which is inspired from TTQ ([Zhu et al. (2016)](https://arxiv.org/abs/1612.01064)) and consists of:
-- **Pruning:** pruning is done before ternarization based on the weights's statistics and one weakly-differentiable pruning function with learnable parameters.
-- **Ternarization**: the remaining positive weights are set to $1$ and the negatives ones to $-1$.
-- **Scaling**: two full-precision scaling trainable parameters are assocaited to the ternary weights tensor, one for the positive weights $W_r$, and one for the negative ones, $W_l$.
+## Supported Configurations
 
-Out contribution is as follows:
-- Rather than using fluctuation prone instantaneous weight statistics, we use a global moving average based pruning mechanism
-- We introduce a tunable parameter that allows the practitioner to directly control the degree of pruning
+**Quantization methods:** FP (baseline), TTQ, DoReFaNet, pTTQ, EMA-pTTQ
 
-The paper is currently under review, for more information (and if you need to cite our work), please contact the author at ckp908@usask.ca
+**Image classification (CNN pipeline):**
 
-## IV) Code structure
+| Dataset | Architectures |
+|---------|--------------|
+| MNIST, KMNIST, Fashion-MNIST, EMNIST | 2D CNN |
+| CIFAR-10, CIFAR-100 | ResNet-18, ResNet-50, DenseNet |
+| STL-10 | ResNet-50 |
+| SVHN | ResNet-18, ResNet-50 |
+| Tiny ImageNet | ResNet-50, ConvNeXt-Tiny |
 
-This repository is structured using different folders:
-- **data**: contains the different datasets (ESR and MNIST) used in the different experiments. At the beginning it empty, but when executing the first experiments, data will be downloaded in this folder.
-- **parameters_files**: This folder contains json files with the parameters of different experiments.
-- **results**: This folder contains the results of the different experiments. At the beginning it is empty, but when executing different experiments, results folders will be generated and saved here.
-- **src**: This folder contains the different source codes. More precisely, it contains the source codes used to perform the different experiments in the paper. 
+**NLP (BERT pipeline):**
 
-## V) Examples
+| Tasks | Model |
+|-------|-------|
+| CoLA, MRPC, RTE, STS-B, SST-2, QNLI | BERT-base-uncased |
 
-All the experiments in the paper can be done executing the source codes in the root folder. The generated results will be stored in the folder *results* and can be plotted using different codes in *src/utils/*.
+## Setup
 
-### a. Experiments.
+Tested on Linux with Python 3.10 and CUDA 12.8.
 
+```bash
+git clone git@github.com:SDMuhsin/Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds.git
+cd Trainable-Pruned-Ternary-Quantization-with-Exponential-Moving-Average-Thresholds
 
-- **Comparison with SOTA**: Use the codes *train_model_base.py*, *experiment_TTQ.py*, and *experiment_pTTQ.py* with the parameters files in *parameters_files/*. 
-    -*train_model_base.py*: trains full precision models without quantization. The models generated by this experiment are the one that can then be fed to the quantization experiment's codes. Example (execution from the folder *src/Experiments/*): 
-    
-                            python train_model_base.py --parameters_file ./parameters_files/MNIST/mnist_FP.json
-                            
-    -*experiment_TTQ.py*: trains TTQ quantized models, using a pre-trained FP model.
-    
-                            python experiment_TTQ.py --parameters_file ./parameters_files/MNIST/mnist_TTQ.json
-                            
-    -*experiment_pTTQ.py*: trains pTTQ quantized models, using a pre-trained FP model. 
-    
-                            python experiment_pTTQ.py --parameters_file ./parameters_files/MNIST/mnist_pTTQ.json
-    -*experiment_pTTQ_experimental.py*: trains pTTQ quantized models, using a pre-trained FP model.
-    
-                            python experiment_pTTQ.py --parameters_file ./parameters_files/MNIST/mnist_pTTQ.json                            
-- **Ablation Studies on k and beta** : These are unique to EMA-pTTQ and triggering there are a matter specifying the required parameters in the corresponding parameters/DATASET/\* file.
+python -m venv env
+source env/bin/activate
+pip install -r requirements.txt
 
-    
-### b. Plot results.
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+export TORCH_HOME=./data
+export HF_HOME=./data
+```
 
-The results obtained in the previous experiments before, can be plotted and visualized using different codes in *src/utils/*:
-- **getResultMetrics.py**: print average (across repetitions) best metrics (decided by best MCC across epochs) for sparsity, mcc and convergence
-			   python getResultMetrics.py --paramters_pth_file=./results/MNIST_2D_CNN_FP/metrics/results*.pth 
+## Usage
 
-- **getCompressionRate.py**: allows to get the compression rates and compression rates of a model with respect to another one.
+All experiments are configured through JSON parameter files in `parameters_files/`. Results are written to `results/`.
 
-                            python getCompressionRate.py --exp_folder_model_a ./results/MNIST_2D_CNN_FP/ --is_model_a_ternarized False --exp_folder_model_b ./results/MNIST_pTTQ/ --is_model_b_ternarized True
+### Image Classification
 
-- **getEnergyConsumption.py**: computes the energy consumption of a model Model_Q with respect to a reference Model_FP.
+**1. Train a full-precision baseline:**
 
-                            python getEnergyConsumption.py --exp_results_folder_ref PATH/TO/MODEL_FP/ --exp_results_folder PATH/TO/MODEL_Q/
+```bash
+python src/Experiments/train_model_base.py \
+    --parameters_file=./parameters_files/CIFAR10/cifar10_FP.json
+```
+
+**2. Quantize with EMA-pTTQ:**
+
+```bash
+python src/Experiments/experiment_pTTQ_experimental.py \
+    --parameters_file=./parameters_files/CIFAR10/cifar10_experimental.json \
+    --k_override=1.0 --beta=0.9
+```
+
+The `--k_override` flag controls pruning aggressiveness (default 1.0). Lower values reduce sparsity; higher values increase it.
+
+Other quantization baselines:
+
+```bash
+# TTQ
+python src/Experiments/experiment_TTQ.py \
+    --parameters_file=./parameters_files/CIFAR10/cifar10_TTQ.json
+
+# pTTQ
+python src/Experiments/experiment_pTTQ.py \
+    --parameters_file=./parameters_files/CIFAR10/cifar10_pTTQ.json
+
+# DoReFaNet
+python src/Experiments/experiment_DoReFaNet.py \
+    --parameters_file=./parameters_files/CIFAR10/cifar10_doReFa.json
+```
+
+### BERT on GLUE
+
+A single script handles all methods and tasks for the BERT pipeline. Results are appended to `results/glue_ternary.csv`.
+
+```bash
+# Full-precision baseline
+python src/Experiments/train_glue_quantized.py \
+    --task_name cola --method fp --epochs 3 \
+    --seeds 41,42,43,44,45
+
+# EMA-pTTQ (recommended config)
+python src/Experiments/train_glue_quantized.py \
+    --task_name cola --method ema_pttq \
+    --warmup_epochs 2 --epochs 15 \
+    --lr_quant 5e-6 --lr_thresh 0.01 --optimizer_thresh sgd \
+    --scheduler_type constant_with_warmup \
+    --k 1.0 --smart_initial_scales \
+    --seeds 41,42,43,44,45
+
+# pTTQ
+python src/Experiments/train_glue_quantized.py \
+    --task_name cola --method pttq \
+    --warmup_epochs 2 --epochs 15 \
+    --lr_quant 5e-6 --lr_thresh 0.01 --optimizer_thresh sgd \
+    --scheduler_type constant_with_warmup \
+    --k 1.0 --smart_initial_scales \
+    --seeds 41,42,43,44,45
+
+# TTQ
+python src/Experiments/train_glue_quantized.py \
+    --task_name cola --method ttq \
+    --warmup_epochs 2 --epochs 15 \
+    --smart_initial_scales \
+    --seeds 41,42,43,44,45
+```
+
+The `--smart_initial_scales` flag initializes w\_p and w\_n from the full-precision weight distribution rather than 1.0. This is necessary for architectures that use LayerNorm instead of BatchNorm (BERT, ConvNeXt).
+
+### HPC (SLURM)
+
+Sbatch submission scripts for the full experiment suite are in `sbatch/`:
+
+```bash
+# Tiny ImageNet: FP baseline first, then all quantized methods
+./sbatch/tinyimagenet_fp.sh --account def-myprof
+# (wait for FP to finish)
+./sbatch/tinyimagenet_quantized.sh --account def-myprof
+
+# GLUE: all methods, all tasks, submitted in parallel
+./sbatch/glue_all.sh --account def-myprof
+```
+
+## Repository Structure
+
+```
+parameters_files/       JSON configs per dataset and method
+  MNIST/
+  CIFAR10/
+  TinyImageNet/
+  ...
+src/
+  Experiments/          Training and quantization scripts
+  Models/CNNs/          CNN architectures (ResNet, ConvNeXt, DenseNet, ...)
+  Models/Transformers/  Transformer architectures
+  DataManipulation/     Dataset loaders
+  utils/                Pruning functions, compression utilities, result plotting
+  triton_kernels/       Sparse ternary inference kernels
+sbatch/                 SLURM submission scripts
+results/                Output directory (created at runtime)
+data/                   Dataset cache (created at runtime)
+```
+
+## Key Hyperparameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| alpha | 10000 | Sigmoid steepness in the pruning function. Do not change. |
+| k | 1.0 | Pruning threshold scaling factor. k < 1 reduces sparsity, k > 1 increases it. |
+| beta | 0.9 | EMA decay factor for threshold smoothing. |
+| init_x, init_y | 1.0 | Initial values for learnable threshold parameters _a_ and _b_. |
+| smart_initial_scales | false | Initialize w\_p/w\_n from weight statistics. Required for LayerNorm architectures. |
+
+## Utility Scripts
+
+```bash
+# Print best metrics across repetitions
+python src/utils/getResultMetrics.py \
+    --paramters_pth_file=./results/EXPERIMENT_ID/metrics/results*.pth
+
+# Compute compression ratio between two models
+python src/utils/getCompressionRate.py \
+    --exp_folder_model_a ./results/FP_EXPERIMENT/ --is_model_a_ternarized False \
+    --exp_folder_model_b ./results/QUANTIZED_EXPERIMENT/ --is_model_b_ternarized True
+
+# Estimate energy consumption ratio
+python src/utils/getEnergyConsumption.py \
+    --exp_results_folder_ref ./results/FP_EXPERIMENT/ \
+    --exp_results_folder ./results/QUANTIZED_EXPERIMENT/
+```
+
+## License
+
+This project is licensed under the CeCILL-B license. See [LICENSE](LICENSE) for details.
+
+## Contact
+
+For questions or to request a preprint, contact Sayed Muhsin at sdmuhsin@gmail.com.

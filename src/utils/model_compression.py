@@ -112,7 +112,7 @@ def get_grads_two_thresh(kernel_grad, kernel, w_r, w_l, x, y):
         (a*kernel_grad).sum(), (b*kernel_grad).sum()
 
 
-def get_params_groups_to_quantize(model, model_to_use):
+def get_params_groups_to_quantize(model, model_to_use, quantize_fc=False):
     """
         Get the groups of the parameters to quantize.
 
@@ -123,6 +123,9 @@ def get_params_groups_to_quantize(model, model_to_use):
         model_to_use: str
             Type of the model to use. Three choices: mnist2dcnn, rawaudiomultichannelcnn,
             and timefrequency2dcnn
+        quantize_fc: bool
+            If True, include fully-connected (linear) layers in the ToQuantize group
+            (excluding the last FC / classification layer).
 
         Returns:
         --------
@@ -140,6 +143,11 @@ def get_params_groups_to_quantize(model, model_to_use):
         # Only the convolutions
         weights_to_be_quantized = [p for n, p in model.named_parameters() if ('conv' in n) and ('bias' not in n)]
         names_params_to_be_quantized = [n for n, p in model.named_parameters() if ('conv' in n) and ('bias' not in n)]
+
+        # Include fc1 (intermediate linear layer) in quantization if requested
+        if quantize_fc:
+            weights_to_be_quantized.append(model.fc1.weight)
+            names_params_to_be_quantized.append('fc1.weight')
 
         # Parameters of batch_norm layers
         bn_weights = [p for n, p in model.named_parameters() if 'norm' in n and 'weight' in n]
@@ -405,7 +413,7 @@ def get_params_groups_to_quantize(model, model_to_use):
             'BNWeights': {'params': bn_weights},
             'Biases': {'params': biases}
         }
-    elif (model_to_use.lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
+    elif (model_to_use.lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
         # Last FC layer
         weights_last_fc = [model.fc.weight]
 
@@ -424,6 +432,49 @@ def get_params_groups_to_quantize(model, model_to_use):
             'LastFCLayer': {'params': weights_last_fc},
             'ToQuantize': {'params': weights_to_be_quantized},
             'BNWeights': {'params': bn_weights},
+            'Biases': {'params': biases}
+        }
+    elif (model_to_use.lower() in ['tinyimagenetconvnext']):
+        # ConvNeXt Tiny from torchvision
+        # Uses LayerNorm (not BatchNorm) and generic sequential parameter names.
+        # Parameter selection is done by module type, not by name patterns.
+
+        # Last FC layer (classifier head)
+        weights_last_fc = [model.model.classifier[2].weight]
+
+        # Parameters to quantize: all Conv2d and Linear weights except the classifier
+        weights_to_be_quantized = []
+        names_params_to_be_quantized = []
+        # LayerNorm weights (serve the same role as BN weights)
+        norm_weights = []
+
+        # Build sets of parameter names by module type
+        classifier_param_names = set()
+        for n, _ in model.model.classifier.named_parameters():
+            classifier_param_names.add(f'model.classifier.{n}')
+
+        for module_name, module in model.named_modules():
+            if isinstance(module, nn.Conv2d):
+                param_name = f'{module_name}.weight'
+                if param_name not in classifier_param_names and module.weight is not None:
+                    weights_to_be_quantized.append(module.weight)
+                    names_params_to_be_quantized.append(param_name)
+            elif isinstance(module, nn.Linear):
+                param_name = f'{module_name}.weight'
+                if param_name not in classifier_param_names and module.weight is not None:
+                    weights_to_be_quantized.append(module.weight)
+                    names_params_to_be_quantized.append(param_name)
+            elif isinstance(module, nn.LayerNorm):
+                if module.weight is not None:
+                    norm_weights.append(module.weight)
+
+        # All bias terms
+        biases = [p for n, p in model.named_parameters() if 'bias' in n]
+
+        params = {
+            'LastFCLayer': {'params': weights_last_fc},
+            'ToQuantize': {'params': weights_to_be_quantized},
+            'BNWeights': {'params': norm_weights},
             'Biases': {'params': biases}
         }
     #======================================================================#
@@ -744,27 +795,30 @@ def pruning_function_pTTQ_experimental_track(x, alpha, t_min, t_max,k=1):
 
     return res, delta_min, delta_max
 
-def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1, beta = 0.9):
+def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max, k=1, beta=0.9, layer_id=0):
     relu = torch.nn.ReLU()
     sigmoid = torch.nn.Sigmoid()
 
     # Compute statistics
     x_mean, x_std = x.mean(), x.std()
-    
+
+    # Per-layer EMA state (avoids cross-layer contamination)
+    if not hasattr(pruning_function_pTTQ_experimental, 'ema_states'):
+        pruning_function_pTTQ_experimental.ema_states = {}
+
     # Compute adaptive thresholds with exponential moving average
     with torch.no_grad():
-        if not hasattr(pruning_function_pTTQ_experimental, 'ema_min'):
-            pruning_function_pTTQ_experimental.ema_min = (x_mean + t_min * x_std).abs()
-            pruning_function_pTTQ_experimental.ema_max = (x_mean + t_max * x_std).abs()
+        if layer_id not in pruning_function_pTTQ_experimental.ema_states:
+            ema_min = (x_mean + t_min * x_std).abs()
+            ema_max = (x_mean + t_max * x_std).abs()
         else:
-            pruning_function_pTTQ_experimental.ema_min = beta * pruning_function_pTTQ_experimental.ema_min + (1 - beta) * (x_mean + t_min * x_std).abs()
-            pruning_function_pTTQ_experimental.ema_max = beta * pruning_function_pTTQ_experimental.ema_max + (1 - beta) * (x_mean + t_max * x_std).abs()
+            prev_min, prev_max = pruning_function_pTTQ_experimental.ema_states[layer_id]
+            ema_min = beta * prev_min + (1 - beta) * (x_mean + t_min * x_std).abs()
+            ema_max = beta * prev_max + (1 - beta) * (x_mean + t_max * x_std).abs()
+        pruning_function_pTTQ_experimental.ema_states[layer_id] = (ema_min, ema_max)
 
-    delta_min = pruning_function_pTTQ_experimental.ema_min
-    delta_max = pruning_function_pTTQ_experimental.ema_max
-
-    # Introduce a tunable constant to temper pruning aggressiveness
-    #k = 1  # This value can be adjusted between 0 and 1
+    delta_min = ema_min
+    delta_max = ema_max
 
     # Apply pruning with adaptive thresholds and tempered aggressiveness
     res = relu(x - k * delta_max) + k * delta_max * sigmoid(alpha * (x - k * delta_max)) - \
@@ -774,7 +828,7 @@ def pruning_function_pTTQ_experimental(x, alpha, t_min, t_max,k=1, beta = 0.9):
 
 
 
-def pruning_function_pTTQ_experimental_learned(x, alpha, a, b, k=1):
+def pruning_function_pTTQ_experimental_learned(x, alpha, a, b, k=1, beta=None):
     """
         Pruning function similar to pruning_function_pTTQ_experimental,
         but thresholds are learnable instead of being computed via EMA.

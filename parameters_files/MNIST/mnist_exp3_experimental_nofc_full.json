@@ -1,5 +1,5 @@
 {
-    "exp_id": "EXP3_MNIST_2D_CNN_experimental",
+    "exp_id": "COMPARE_MNIST_2D_CNN_experimental_nofc",
     "lr": 0.001,
     "lr_wn_wp": 0.0001,
     "lr_thresh": 0.0001,
@@ -27,6 +27,7 @@
     "dataset_type": "MNIST",
     "percentage_samples_keep": 1,
     "dataset_folder": "./data/MNIST/",
-    "quantize_fc": true,
+    "quantize_fc": false,
+    "k_override": null,
     "beta": 0.9
 }

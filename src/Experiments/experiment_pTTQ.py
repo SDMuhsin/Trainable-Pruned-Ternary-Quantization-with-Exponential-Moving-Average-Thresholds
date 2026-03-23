@@ -118,6 +118,15 @@ class Experiment(ExperimentTTQ):
         else:
             raise ValueError("Optimizer {} is not valid to optimize the pruning parameters".format(parameters_exp['optimizer_pruning_params']))
 
+        # k factor for threshold scaling (default 1.0 = no scaling)
+        self.k = 1.0
+        if ('k' in parameters_exp and parameters_exp['k'] is not None):
+            self.k = float(parameters_exp['k'])
+        if ('k_override' in parameters_exp and parameters_exp['k_override'] is not None):
+            self.k = float(parameters_exp['k_override'])
+        if self.k != 1.0:
+            self.exp_id += f"_k{self.k}"
+
         # Parameters of the exp
         self.parameters_exp = parameters_exp
 
@@ -131,9 +140,11 @@ class Experiment(ExperimentTTQ):
 
         Return quantized weights of a layer.
         Only possible values of quantized weights are: {zero, w_p, -w_n}.
+
+        When k != 1.0, the pruning thresholds are scaled by k (same as EMA-pTTQ).
         """
-        # Getting the pruned kernel
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        # Getting the pruned kernel (k scales the threshold params)
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.k * self.a, self.k * self.b)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         return w_p*A + (-w_n*B)
@@ -156,8 +167,8 @@ class Experiment(ExperimentTTQ):
             5. gradient for b
             6. gradient for alpha
         """
-        # Grads of w_p and w_n
-        pruned_kernel = self.pruning_function(kernel, self.alpha, self.a, self.b)
+        # Grads of w_p and w_n (use k-scaled thresholds for pruning mask)
+        pruned_kernel = self.pruning_function(kernel, self.alpha, self.k * self.a, self.k * self.b)
         A = (pruned_kernel > 0).float()
         B = (pruned_kernel < 0).float()
         c = torch.ones(pruned_kernel.size()).to(self.device) - A - B
@@ -166,44 +177,59 @@ class Experiment(ExperimentTTQ):
         grad_wn = (B*kernel_grad).sum()
 
         # Grads
+        # NOTE: All threshold/alpha gradients are modulated by kernel_grad (loss gradient)
+        # via straight-through estimation. Without this, dP/da is always >= 0, causing
+        # thresholds to monotonically decrease and sparsity to collapse.
+        # When k != 1.0, deltas are k-scaled and grad_a/grad_b get an extra k factor
+        # from the chain rule: d(k*a)/d(a) = k.
         if (self.pruning_function_type == 'manessi_asymmetric_pTTQ'):
-            # Grads of the thresholds hyperparameters
+            # Grads of the thresholds hyperparameters (k-scaled deltas)
             kernel_mean, kernel_std = kernel.mean(), kernel.std()
-            delta_min = (kernel_mean + self.a*kernel_std).abs()
-            delta_max = (kernel_mean + self.b*kernel_std).abs()
-            grad_a = (
+            delta_min = self.k * (kernel_mean + self.a*kernel_std).abs()
+            delta_max = self.k * (kernel_mean + self.b*kernel_std).abs()
+            grad_a = (kernel_grad * (
                             kernel_std*torch.heaviside((-kernel-delta_min).float(),  torch.tensor([0]).float().to(self.device) )\
                             - kernel_std*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))\
                             + kernel_std*delta_min*self.alpha*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))
-                     ).sum()
-            grad_b = (
+                     )).sum()
+            grad_b = (kernel_grad * (
                             -kernel_std*torch.heaviside((kernel-delta_max).float(),  torch.tensor([0]).float().to(self.device) )\
                             + kernel_std*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))\
                             - kernel_std*delta_max*self.alpha*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))
-                     ).sum()
+                     )).sum()
             # Grads of alpha
-            grad_alpha = (delta_max*(kernel-delta_max)*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))\
-                        + delta_min*(kernel+delta_min)*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))).sum()
+            grad_alpha = (kernel_grad * (
+                        delta_max*(kernel-delta_max)*torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-delta_max)))\
+                        + delta_min*(kernel+delta_min)*torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-delta_min)))
+                        )).sum()
 
         elif (self.pruning_function_type == 'manessi_asymmetric'):
-            # Grads of w_p and w_n
-            grad_a = (
-                        torch.heaviside((-kernel-self.a).float(),  torch.tensor([0]).float().to(self.device) )\
-                        - torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))\
-                        + self.a*self.alpha*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))
-                     ).sum()
-            grad_b = (
-                        -torch.heaviside((kernel-self.b).float(),  torch.tensor([0]).float().to(self.device) )\
-                        + torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))\
-                        - self.b*self.alpha*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))
-                     ).sum()
-            # Grads of alpha
-            grad_alpha = (self.b*(kernel-self.b)*torch.nn.functional.sigmoid(self.alpha*(kernel-self.b))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-self.b)))\
-                        + self.a*(kernel+self.a)*torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-self.a)))).sum()
+            # Grads of a and b (loss-modulated via kernel_grad, k-scaled thresholds)
+            a_eff = self.k * self.a
+            b_eff = self.k * self.b
+            grad_a = (kernel_grad * (
+                        torch.heaviside((-kernel-a_eff).float(),  torch.tensor([0]).float().to(self.device) )\
+                        - torch.nn.functional.sigmoid(self.alpha*(-kernel-a_eff))\
+                        + a_eff*self.alpha*torch.nn.functional.sigmoid(self.alpha*(-kernel-a_eff))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-a_eff)))
+                     )).sum()
+            grad_b = (kernel_grad * (
+                        -torch.heaviside((kernel-b_eff).float(),  torch.tensor([0]).float().to(self.device) )\
+                        + torch.nn.functional.sigmoid(self.alpha*(kernel-b_eff))\
+                        - b_eff*self.alpha*torch.nn.functional.sigmoid(self.alpha*(kernel-b_eff))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-b_eff)))
+                     )).sum()
+            # Grads of alpha (uses k-scaled thresholds)
+            grad_alpha = (kernel_grad * (
+                        b_eff*(kernel-b_eff)*torch.nn.functional.sigmoid(self.alpha*(kernel-b_eff))*(1-torch.nn.functional.sigmoid(self.alpha*(kernel-b_eff)))\
+                        + a_eff*(kernel+a_eff)*torch.nn.functional.sigmoid(self.alpha*(-kernel-a_eff))*(1-torch.nn.functional.sigmoid(self.alpha*(-kernel-a_eff)))
+                        )).sum()
 
 
         else:
             raise ValueError("Pruning function {} is not valid".format(self.pruning_function_type))
+
+        # Chain rule: d(loss)/d(a) = d(loss)/d(k*a) * k
+        grad_a = self.k * grad_a
+        grad_b = self.k * grad_b
 
         return grad_fp_kernel, grad_wp, grad_wn, grad_a, grad_b, grad_alpha
 
@@ -548,6 +574,7 @@ def main():
     # Add the arguments to the parser
     default_parameters_file = "./parameters_files/MNIST/mnist_pTTQ.json"
     ap.add_argument('--parameters_file', default=default_parameters_file, help="Parameters for the experiment", type=str)
+    ap.add_argument('--k_override', default=None, help="Override k value for pTTQ threshold scaling", type=float)
     args = vars(ap.parse_args())
 
     # Getting the value of the arguments
@@ -562,6 +589,9 @@ def main():
     if ('doRandomSearch' not in parameters_exp):
         parameters_exp['doRandomSearch'] = True
     doRandomSearch = parameters_exp['doRandomSearch']
+
+    # k_override for threshold scaling
+    parameters_exp['k_override'] = args['k_override']
 
     #==========================================================================#
     # Creating an instance of the experiment
@@ -638,8 +668,10 @@ def main():
                 shutil.copy2('./src/Models/CNNs/mnist_CNN.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() in ['kmnistresnet18','fmnistresnet18','svhnresnet18','emnistresnet18']):
                 shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
-            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50']):
+            elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
                 shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
+            elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext']):
+                shutil.copy2('./src/Models/CNNs/convnext.py', resultsFolder + '/params_exp/network_architecture.py')
             elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
                 shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')               
             elif (parameters_exp['model_to_use'].lower() == 'kmnistdensenet'):

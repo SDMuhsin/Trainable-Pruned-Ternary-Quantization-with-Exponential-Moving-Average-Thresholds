@@ -21,3 +21,6 @@ access_token.txt
 env
 downloads
 *.txt
+
+llmdocs
+data

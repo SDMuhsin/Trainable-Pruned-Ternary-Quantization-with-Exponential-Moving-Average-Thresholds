@@ -1,13 +1,13 @@
 {
-    "exp_id": "EXP3_MNIST_2D_CNN_experimental",
+    "exp_id": "DIAG_MNIST_2D_CNN_experimental_withfc",
     "lr": 0.001,
     "lr_wn_wp": 0.0001,
     "lr_thresh": 0.0001,
-    "nb_repetitions": 2,
+    "nb_repetitions": 1,
     "batch_size_train": 32,
     "batch_size_test": 32,
     "weight_decay": 0,
-    "nb_epochs": 25,
+    "nb_epochs": 10,
     "loss_function": "CE",
     "k": 1,
     "optimizer_pruning_params": "Adamax",
@@ -28,5 +28,6 @@
     "percentage_samples_keep": 1,
     "dataset_folder": "./data/MNIST/",
     "quantize_fc": true,
+    "k_override": null,
     "beta": 0.9
 }
