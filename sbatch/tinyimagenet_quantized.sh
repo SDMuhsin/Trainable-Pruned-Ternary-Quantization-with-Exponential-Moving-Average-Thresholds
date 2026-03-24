@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# TinyImageNet ResNet50 Quantized Methods — SLURM Submission Script
+# TinyImageNet ConvNeXt Quantized Methods — SLURM Submission Script
 # ============================================================================
 #
 # Submits all quantized methods in parallel:
@@ -8,6 +8,10 @@
 #   - TTQ (1 job)
 #   - pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
 #   - EMA-pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
+#
+# ConvNeXt is ~5-8x slower per epoch than ResNet-50 for quantized methods
+# due to 58 quantizable layers with per-step threshold/EMA updates.
+# Time limits reflect this (from prior ConvNeXt benchmarks).
 #
 # PREREQUISITE: FP baseline must be trained first!
 #   ./sbatch/tinyimagenet_fp.sh
@@ -43,7 +47,7 @@ fi
 mkdir -p ./logs ./results
 
 # Verify FP model exists
-FP_MODEL_DIR="./results/PROD_TinyImageNet_RESNET50_FP_OW_0/model/"
+FP_MODEL_DIR="./results/PROD_TinyImageNet_CONVNEXT_FP_OW_0/model/"
 if [[ ! -d "$FP_MODEL_DIR" ]]; then
     echo "ERROR: FP model directory not found: $FP_MODEL_DIR"
     echo "Run ./sbatch/tinyimagenet_fp.sh first and wait for completion."
@@ -53,7 +57,7 @@ fi
 job_count=0
 
 echo "============================================"
-echo "TinyImageNet ResNet50 — Quantized Methods"
+echo "TinyImageNet ConvNeXt — Quantized Methods"
 echo "============================================"
 
 # ============================================================================
@@ -107,43 +111,43 @@ EOF
 }
 
 # ============================================================================
-# DoReFaNet (1 job)
+# DoReFaNet (1 job) — ~17 min/ep on loaded GPU -> ~2d on 3g.40gb for 50ep
 # ============================================================================
 submit_job \
     "tinyimg_dorefa" \
-    "24:00:00" \
-    "python3 src/Experiments/experiment_DoReFaNet.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_resnet50_doReFa_prod.json" \
-    "DoReFaNet, 50ep"
+    "2-00:00:00" \
+    "python3 src/Experiments/experiment_DoReFaNet.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_convnext_doReFa_prod.json" \
+    "DoReFaNet ConvNeXt, 50ep"
 
 # ============================================================================
-# TTQ (1 job)
+# TTQ (1 job) — ~93 min/ep on loaded GPU -> ~5d on 3g.40gb for 50ep
 # ============================================================================
 submit_job \
     "tinyimg_ttq" \
-    "4-00:00:00" \
-    "python3 src/Experiments/experiment_TTQ.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_resnet50_TTQ_prod.json" \
-    "TTQ, 50ep"
+    "5-00:00:00" \
+    "python3 src/Experiments/experiment_TTQ.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_convnext_TTQ_prod.json" \
+    "TTQ ConvNeXt, 50ep"
 
 # ============================================================================
-# pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
+# pTTQ (3 jobs: k=0.5, k=1.0, k=1.2) — similar to TTQ, ~5d
 # ============================================================================
 for k_val in 0.5 1.0 1.2; do
     submit_job \
         "tinyimg_pttq_k${k_val}" \
-        "4-00:00:00" \
-        "python3 src/Experiments/experiment_pTTQ.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_resnet50_pTTQ_prod.json --k_override=$k_val" \
-        "pTTQ k=$k_val, 50ep"
+        "5-00:00:00" \
+        "python3 src/Experiments/experiment_pTTQ.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_convnext_pTTQ_prod.json --k_override=$k_val" \
+        "pTTQ ConvNeXt k=$k_val, 50ep"
 done
 
 # ============================================================================
-# EMA-pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
+# EMA-pTTQ (3 jobs: k=0.5, k=1.0, k=1.2) — ~153 min/ep -> ~7d for 50ep
 # ============================================================================
 for k_val in 0.5 1.0 1.2; do
     submit_job \
         "tinyimg_emapttq_k${k_val}" \
         "7-00:00:00" \
-        "python3 src/Experiments/experiment_pTTQ_experimental.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_resnet50_experimental_prod.json --k_override=$k_val" \
-        "EMA-pTTQ k=$k_val, 50ep"
+        "python3 src/Experiments/experiment_pTTQ_experimental.py --parameters_file=./parameters_files/TinyImageNet/tinyimagenet_convnext_experimental_prod.json --k_override=$k_val" \
+        "EMA-pTTQ ConvNeXt k=$k_val, 50ep"
 done
 
 echo ""

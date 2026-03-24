@@ -233,6 +233,26 @@ class Experiment(ExperimentTTQ):
 
         return grad_fp_kernel, grad_wp, grad_wn, grad_a, grad_b, grad_alpha
 
+    def initial_scales(self, kernel):
+        """Override TTQ's default (1.0, 1.0) to support smart_initial_scales.
+
+        Required for architectures without BatchNorm after quantized layers
+        (e.g. ConvNeXt with LayerNorm) where the default 1.0 scaling causes
+        a catastrophic scale mismatch.
+        """
+        if not self.parameters_exp.get('smart_initial_scales', False):
+            return 1.0, 1.0
+
+        k_mean, k_std = kernel.mean(), kernel.std()
+        delta = abs(k_mean + self.init_x * k_std)
+
+        pos_mask = kernel > delta
+        neg_mask = kernel < -delta
+
+        w_p = kernel[pos_mask].mean().item() if pos_mask.any() else 1.0
+        w_n = (-kernel[neg_mask]).mean().item() if neg_mask.any() else 1.0
+        return w_p, w_n
+
     def initial_alpha(self, kernel):
         return self.alpha
 
