@@ -60,7 +60,7 @@ for f in ./data/ImageNet_train.tar ./data/ImageNet_val.tar; do
 done
 
 CPUS=$((NUM_GPUS * 12))
-MEM=$((NUM_GPUS * 30000))
+MEM=0
 
 mkdir -p ./logs ./results
 
@@ -77,7 +77,7 @@ sbatch_id=$(sbatch --parsable <<EOF
 #SBATCH --error=./logs/imgnet_fp_%j.err
 #SBATCH --time=2-00:00:00
 #SBATCH --gres=gpu:h100:${NUM_GPUS}
-#SBATCH --mem=${MEM}M
+#SBATCH --mem=0
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --account=${ACCOUNT}
 
@@ -86,6 +86,7 @@ source ./env/bin/activate
 
 export HF_HOME=\$(pwd)/data
 export TORCH_HOME=\$(pwd)/data
+export MPLCONFIGDIR=\$SLURM_TMPDIR/mpl
 export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export HF_HUB_OFFLINE=1

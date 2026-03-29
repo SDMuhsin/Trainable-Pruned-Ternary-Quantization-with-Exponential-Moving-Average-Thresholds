@@ -68,7 +68,7 @@ if [[ ! -d "$FP_MODEL_DIR" ]]; then
 fi
 
 CPUS=$((NUM_GPUS * 12))
-MEM=$((NUM_GPUS * 30000))
+MEM=0
 job_count=0
 
 echo "============================================"
@@ -92,7 +92,7 @@ submit_job() {
 #SBATCH --error=./logs/${job_name}_%j.err
 #SBATCH --time=2-00:00:00
 #SBATCH --gres=gpu:h100:${NUM_GPUS}
-#SBATCH --mem=${MEM}M
+#SBATCH --mem=0
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --account=${ACCOUNT}
 
@@ -101,6 +101,7 @@ source ./env/bin/activate
 
 export HF_HOME=\$(pwd)/data
 export TORCH_HOME=\$(pwd)/data
+export MPLCONFIGDIR=\$SLURM_TMPDIR/mpl
 export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export HF_HUB_OFFLINE=1
