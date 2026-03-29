@@ -18,6 +18,8 @@ results**
 *__pycache__*
 *.pyc
 access_token.txt
+.hf_token
+*.log
 env
 downloads
 *.txt

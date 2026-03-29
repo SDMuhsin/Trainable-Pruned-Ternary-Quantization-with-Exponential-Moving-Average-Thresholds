@@ -144,13 +144,44 @@ class Experiment(object):
             parameters_exp['do_normalization_weights'] = False
         self.do_normalization_weights = parameters_exp['do_normalization_weights']
 
-        # Device
+        # Device and multi-GPU support
+        # Config options: "cpu", "cuda" (all GPUs), "cuda:0" (single GPU), "cuda:0,1,2" (specific GPUs)
         if ('device' not in parameters_exp):
             parameters_exp['device'] = "cuda:0" if torch.cuda.is_available() else "cpu"
-        if ('cuda' in parameters_exp['device'].lower()) or ('gpu' in parameters_exp['device']):
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device_str = parameters_exp['device'].lower()
+        self.gpu_ids = None
+        if 'cuda' in device_str or 'gpu' in device_str:
+            if not torch.cuda.is_available():
+                self.device = torch.device("cpu")
+            elif ',' in device_str:
+                # Multiple specific GPUs: "cuda:0,1,2"
+                id_str = device_str.split(':')[1] if ':' in device_str else device_str.replace('cuda', '')
+                self.gpu_ids = [int(x.strip()) for x in id_str.split(',')]
+                self.device = torch.device(f"cuda:{self.gpu_ids[0]}")
+            elif ':' in device_str:
+                # Single specific GPU: "cuda:1"
+                self.device = torch.device(device_str)
+            else:
+                # "cuda" — use all available GPUs
+                n_gpus = torch.cuda.device_count()
+                if n_gpus > 1:
+                    self.gpu_ids = list(range(n_gpus))
+                self.device = torch.device("cuda:0")
         else:
             self.device = torch.device("cpu")
+
+        # DataLoader workers (important for large datasets like ImageNet)
+        # Auto-disable if /dev/shm is too small (common in containers)
+        requested_workers = parameters_exp.get('num_workers', 0)
+        if requested_workers > 0:
+            try:
+                shm_size = os.statvfs('/dev/shm').f_frsize * os.statvfs('/dev/shm').f_blocks
+                if shm_size < 1024 * 1024 * 1024:  # Less than 1GB
+                    print(f"WARNING: /dev/shm is only {shm_size/(1024*1024):.0f}MB. Setting num_workers=0 to avoid shared memory errors.")
+                    requested_workers = 0
+            except OSError:
+                pass
+        self.num_workers = requested_workers
 
         # Training params
         self.lr = parameters_exp['lr']
@@ -755,6 +786,48 @@ class Experiment(object):
                 self.val_ds = TinyImageNetDatasetWrapper(data=self.val_data)
             self.test_ds = TinyImageNetDatasetWrapper(data=self.testing_data)
 
+        elif (self.dataset_type.lower() == 'imagenet'):
+            train_dir = os.path.join(parameters_exp['dataset_folder'], 'train')
+            val_dir = os.path.join(parameters_exp['dataset_folder'], 'val')
+
+            # Standard ImageNet transforms
+            train_transform = torchvision.transforms.Compose([
+                torchvision.transforms.RandomResizedCrop(224),
+                torchvision.transforms.RandomHorizontalFlip(),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+
+            val_transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize(256),
+                torchvision.transforms.CenterCrop(224),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+
+            # Load datasets lazily via ImageFolder (images loaded on-the-fly, not into memory)
+            self.train_ds = torchvision.datasets.ImageFolder(root=train_dir, transform=train_transform)
+            self.test_ds = torchvision.datasets.ImageFolder(root=val_dir, transform=val_transform)
+
+            print("Number of ImageNet training samples: {}".format(len(self.train_ds)))
+            print("Number of ImageNet validation/test samples: {}".format(len(self.test_ds)))
+
+            # Keeping only a percentage of samples
+            if self.percentage_samples_keep < 1:
+                nb_samples_keep = int(self.percentage_samples_keep * len(self.train_ds))
+                self.train_ds = torch.utils.data.Subset(self.train_ds, list(range(nb_samples_keep)))
+                print("Keeping {} training samples ({:.0f}%)".format(nb_samples_keep, self.percentage_samples_keep * 100))
+
+            # Optional train/val split from training data
+            if self.separate_val_ds:
+                total = len(self.train_ds)
+                val_size = int(0.2 * total)
+                train_size = total - val_size
+                self.train_ds, self.val_ds = torch.utils.data.random_split(
+                    self.train_ds, [train_size, val_size],
+                    generator=torch.Generator().manual_seed(42)
+                )
+
         elif (self.dataset_type.lower() == 'kmnist'):
 
             # Transformations to apply to the dataset
@@ -874,7 +947,7 @@ class Experiment(object):
             pass
         elif (self.dataset_type.lower() == 'kmnist'):
             pass
-        elif (self.dataset_type.lower() in ['svhn','emnist','cifar10','cifar100','stl10','tinyimagenet']):
+        elif (self.dataset_type.lower() in ['svhn','emnist','cifar10','cifar100','stl10','tinyimagenet','imagenet']):
             pass
         else:
             raise ValueError('Dataset type {} is not supported'.format(self.dataset_type))
@@ -894,7 +967,9 @@ class Experiment(object):
         # train_sampler = SequentialSampler(train_indices)
         self.train_loader = torch.utils.data.DataLoader(self.train_ds,\
                                                        batch_size=self.batch_size_train,\
-                                                       sampler=train_sampler)
+                                                       sampler=train_sampler,\
+                                                       num_workers=self.num_workers,\
+                                                       pin_memory=(self.device.type == 'cuda'))
 
         # Validation set
         if (self.separate_val_ds):
@@ -903,7 +978,9 @@ class Experiment(object):
             # val_sampler = SequentialSampler(val_indices)
             self.val_loader = torch.utils.data.DataLoader(self.val_ds,\
                                                            batch_size=self.batch_size_train,\
-                                                           sampler=val_sampler)
+                                                           sampler=val_sampler,\
+                                                           num_workers=self.num_workers,\
+                                                           pin_memory=(self.device.type == 'cuda'))
 
         # Testing set
         test_indices = list(range(0, len(self.test_ds)))
@@ -911,7 +988,9 @@ class Experiment(object):
         # test_sampler = SequentialSampler(test_indices)
         self.test_loader = torch.utils.data.DataLoader(self.test_ds,\
                                                        batch_size=self.batch_size_test,\
-                                                       sampler=test_sampler)
+                                                       sampler=test_sampler,\
+                                                       num_workers=self.num_workers,\
+                                                       pin_memory=(self.device.type == 'cuda'))
 
     def modelCreation(self):
         """
@@ -943,6 +1022,8 @@ class Experiment(object):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=200)
             elif (self.model_to_use.lower() in ['tinyimagenetconvnext']):
                 self.model = ConvNeXtTinyClassificationModel(num_classes=200)
+            elif (self.model_to_use.lower() in ['imagenetconvnext']):
+                self.model = ConvNeXtTinyClassificationModel(num_classes=1000)
             elif (self.model_to_use.lower() in ['cifar100resnet50']):
                 self.model = ResNet50ClassificationModel(input_channels=3,nb_classes=100)
             elif (self.model_to_use.lower() in ['cifar100resnet34']):
@@ -1017,25 +1098,35 @@ class Experiment(object):
         # Sending the model to the correct device
         self.model.to(self.device)
 
-    def balance_classes_loss(self):
-        # Getting the labels for the training set
-        y_train = np.array([self.train_ds[sample_id][1] for sample_id in range(len(self.train_ds))])
+        # Multi-GPU DataParallel wrapping
+        # self.model stays as the raw model (used for state_dict, named_parameters, etc.)
+        # self.model_parallel is used only in the forward pass
+        if self.gpu_ids is not None and len(self.gpu_ids) > 1:
+            self.model_parallel = torch.nn.DataParallel(self.model, device_ids=self.gpu_ids)
+            print(f"DataParallel enabled on GPUs: {self.gpu_ids}")
+        else:
+            self.model_parallel = self.model
 
+    def balance_classes_loss(self):
         # Computing the weights
         if (self.compute_class_weights):
+            # Getting the labels for the training set (expensive for large datasets)
+            y_train = np.array([self.train_ds[sample_id][1] for sample_id in range(len(self.train_ds))])
             class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
+            print("\n\nClass weights: {}\n\n".format(class_weights))
+            class_weights = torch.tensor(class_weights, dtype=torch.float)
+            class_weights = class_weights.to(self.device)
         else:
-            class_weights = np.array([1.0 for _ in range(len(np.unique(y_train)))])
-        print("\n\nClass weights: {}\n\n".format(class_weights))
-        class_weights = torch.tensor(class_weights, dtype=torch.float)
-        class_weights = class_weights.to(self.device)
+            # Uniform weights — equivalent to no weighting, so don't pass weights
+            # (avoids shape mismatch when dataset has fewer classes than model outputs)
+            class_weights = None
+            print("\n\nClass weights: uniform (no weighting)\n\n")
 
-        # Creatining the new weighthed loss
+        # Creating the new weighted loss
         if (self.parameters_exp['loss_function'].lower() == 'ce'):
             self.criterion = torch.nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
         elif (self.parameters_exp['loss_function'].lower() == 'gce'):
             self.criterion = GeneralizedCrossEntropy(class_weights=class_weights)
-            # raise NotImplementedError("Class weighting it is not implemented for GCE loss function")
         else:
             raise ValueError('Loss function {} is not valid'.format(self.parameters_exp['loss_function']))
 
@@ -1077,7 +1168,7 @@ class Experiment(object):
         audio_features, labels = audio_features.to(self.device), labels.to(self.device)
 
         # Computing the loss
-        out = self.model(audio_features) # Generate predictions
+        out = self.model_parallel(audio_features) # Generate predictions (uses DataParallel if multi-GPU)
         loss = self.criterion(out, labels.long()) # Calculate loss
         #print("Sample labels:", [label for _, label in self.training_data[:10]])  # Print first 10 labels
 
@@ -1562,7 +1653,7 @@ def main():
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')    
         elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
-        elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext']):
+        elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext', 'imagenetconvnext']):
             shutil.copy2('./src/Models/CNNs/convnext.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['stl10inceptionv4']):
             shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')

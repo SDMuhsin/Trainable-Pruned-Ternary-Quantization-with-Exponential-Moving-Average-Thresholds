@@ -571,10 +571,10 @@ def main():
             shutil.copy2('./src/Models/CNNs/resnet18.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() in ['cifar10resnet50','cifar100resnet50','stl10resnet50','tinyimagenetresnet50']):
             shutil.copy2('./src/Models/CNNs/resnet50.py', resultsFolder + '/params_exp/network_architecture.py')
-        elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext']):
+        elif (parameters_exp['model_to_use'].lower() in ['tinyimagenetconvnext', 'imagenetconvnext']):
             shutil.copy2('./src/Models/CNNs/convnext.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnistenet'):
-            shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')          
+            shutil.copy2('./src/Models/CNNs/fmnist_enet.py', resultsFolder + '/params_exp/network_architecture.py')
         elif (parameters_exp['model_to_use'].lower() == 'fmnistinceptionv4'):
             shutil.copy2('./src/Models/CNNs/inceptionv4.py', resultsFolder + '/params_exp/network_architecture.py')   
         elif (parameters_exp['model_to_use'].lower() == 'kmnistdensenet'):

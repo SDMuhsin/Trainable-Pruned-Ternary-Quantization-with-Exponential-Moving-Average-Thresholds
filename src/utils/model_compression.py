@@ -80,7 +80,7 @@ def get_grads(kernel_grad, kernel, w_p, w_n, t):
     # masks
     a = (kernel > delta).float()
     b = (kernel < -delta).float()
-    c = torch.ones(kernel.size()).cuda() - a - b
+    c = torch.ones(kernel.size()).to(kernel.device) - a - b
     # scaled kernel grad and grads for scaling factors (w_p, w_n)
     return w_p*a*kernel_grad + w_n*b*kernel_grad + 1.0*c*kernel_grad,\
         (a*kernel_grad).sum(), (b*kernel_grad).sum()
@@ -106,7 +106,7 @@ def get_grads_two_thresh(kernel_grad, kernel, w_r, w_l, x, y):
     # masks
     a = (kernel > delta_max).float()
     b = (kernel < delta_min).float()
-    c = torch.ones(kernel.size()).cuda() - a - b
+    c = torch.ones(kernel.size()).to(kernel.device) - a - b
     # scaled kernel grad and grads for scaling factors (w_p, w_n)
     return w_r*a*kernel_grad + w_l*b*kernel_grad + 1.0*c*kernel_grad,\
         (a*kernel_grad).sum(), (b*kernel_grad).sum()
@@ -434,7 +434,7 @@ def get_params_groups_to_quantize(model, model_to_use, quantize_fc=False):
             'BNWeights': {'params': bn_weights},
             'Biases': {'params': biases}
         }
-    elif (model_to_use.lower() in ['tinyimagenetconvnext']):
+    elif (model_to_use.lower() in ['tinyimagenetconvnext', 'imagenetconvnext']):
         # ConvNeXt Tiny from torchvision
         # Uses LayerNorm (not BatchNorm) and generic sequential parameter names.
         # Parameter selection is done by module type, not by name patterns.
