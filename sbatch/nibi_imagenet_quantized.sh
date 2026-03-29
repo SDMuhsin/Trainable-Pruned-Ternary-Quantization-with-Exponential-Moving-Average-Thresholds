@@ -68,7 +68,13 @@ if [[ ! -d "$FP_MODEL_DIR" ]]; then
 fi
 
 CPUS=$((NUM_GPUS * 12))
-MEM=0
+if [[ "$NUM_GPUS" -eq 8 ]]; then
+    MEM_LINE="#SBATCH --mem=0"
+    WHOLE_NODE="#SBATCH --nodes=1 --exclusive"
+else
+    MEM_LINE="#SBATCH --mem=$((NUM_GPUS * 64000))M"
+    WHOLE_NODE=""
+fi
 job_count=0
 
 echo "============================================"
@@ -92,8 +98,9 @@ submit_job() {
 #SBATCH --error=./logs/${job_name}_%j.err
 #SBATCH --time=2-00:00:00
 #SBATCH --gres=gpu:h100:${NUM_GPUS}
-#SBATCH --mem=0
+${MEM_LINE}
 #SBATCH --cpus-per-task=${CPUS}
+${WHOLE_NODE}
 #SBATCH --account=${ACCOUNT}
 
 module load gcc arrow scipy-stack cuda
