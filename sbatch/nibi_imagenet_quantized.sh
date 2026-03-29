@@ -9,12 +9,8 @@
 #   - pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
 #   - EMA-pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
 #
-# Nibi GPU nodes: 8x H100 80GB per node, Intel Xeon 6 Granite Rapids
-# Request format: --gres=gpu:h100:N  (full GPUs, no MIG slices)
-#
-# Quantized methods have per-layer custom gradient steps that don't
-# parallelize across GPUs, so the forward pass is the main beneficiary
-# of multi-GPU. 4 GPUs is the sweet spot for throughput/cost.
+# Data strategy: ImageNet stored as tar files in /project to avoid file count
+# quota. Each job extracts to its own $SLURM_TMPDIR (node-local NVMe).
 #
 # PREREQUISITE: FP baseline must be trained first!
 #   ./sbatch/nibi_imagenet_fp.sh --account def-myprof
@@ -54,31 +50,30 @@ done
 
 if [[ -z "$ACCOUNT" ]]; then
     echo "ERROR: --account is required on Nibi"
-    echo "Usage: $0 --account def-myprof [--gpus $NUM_GPUS] [--epochs $EPOCHS]"
     exit 1
 fi
 
-# Scale resources per GPU
-CPUS=$((NUM_GPUS * 12))
-MEM=$((NUM_GPUS * 30000))
+for f in ./data/ImageNet_train.tar ./data/ImageNet_val.tar; do
+    if [[ ! -f "$f" ]]; then
+        echo "ERROR: $f not found."
+        exit 1
+    fi
+done
 
-mkdir -p ./logs ./results
-
-# Verify FP model exists
 FP_MODEL_DIR="./results/PROD_ImageNet_CONVNEXT_FP_OW_0/model/"
 if [[ ! -d "$FP_MODEL_DIR" ]]; then
-    echo "ERROR: FP model directory not found: $FP_MODEL_DIR"
-    echo "Run ./sbatch/nibi_imagenet_fp.sh first and wait for completion."
+    echo "ERROR: FP model not found: $FP_MODEL_DIR"
+    echo "Run ./sbatch/nibi_imagenet_fp.sh first."
     exit 1
 fi
 
+CPUS=$((NUM_GPUS * 12))
+MEM=$((NUM_GPUS * 30000))
 job_count=0
 
 echo "============================================"
-echo "ImageNet-1K ConvNeXt — Quantized Methods (Nibi)"
-echo "  GPUs per job: ${NUM_GPUS}x H100 80GB"
-echo "  Epochs: ${EPOCHS}"
-echo "  Time limit: 2-00:00:00"
+echo "ImageNet-1K ConvNeXt — Quantized (Nibi)"
+echo "  ${NUM_GPUS}x H100, ${EPOCHS}ep, 2d limit"
 echo "============================================"
 
 # ============================================================================
@@ -110,26 +105,33 @@ export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export HF_HUB_OFFLINE=1
 export PYTHONPATH=\$PYTHONPATH:\$(pwd)
-mkdir -p \$HF_HOME
 
 echo '========================================'
-echo "Job: $job_name"
-echo "Config: $desc"
+echo "Job: $job_name — $desc"
 echo "Cluster: Nibi — ${NUM_GPUS}x H100 (DataParallel)"
 echo "Epochs: ${EPOCHS}"
 echo "Started: \$(date)"
 echo '========================================'
 nvidia-smi
 
-# Write a temporary config with the requested epoch count
+# Extract ImageNet from tar to node-local NVMe
+echo "Extracting ImageNet to \$SLURM_TMPDIR..."
+mkdir -p \$SLURM_TMPDIR/ImageNet
+tar xf ./data/ImageNet_train.tar -C \$SLURM_TMPDIR/ImageNet &
+tar xf ./data/ImageNet_val.tar -C \$SLURM_TMPDIR/ImageNet &
+wait
+echo "Extraction complete: \$(ls \$SLURM_TMPDIR/ImageNet/train | wc -l) train classes, \$(ls \$SLURM_TMPDIR/ImageNet/val | wc -l) val classes"
+
+# Write config pointing at SLURM_TMPDIR
 python3 -c "
-import json
+import json, os
 with open('$config_file') as f:
     cfg = json.load(f)
 cfg['nb_epochs'] = ${EPOCHS}
+cfg['dataset_folder'] = os.environ['SLURM_TMPDIR'] + '/ImageNet/'
 with open('/tmp/nibi_${job_name}_\${SLURM_JOB_ID}.json', 'w') as f:
     json.dump(cfg, f, indent=2)
-print('Config written with nb_epochs=${EPOCHS}')
+print('Config: nb_epochs=${EPOCHS}, dataset_folder:', cfg['dataset_folder'])
 "
 
 $python_cmd --parameters_file=/tmp/nibi_${job_name}_\${SLURM_JOB_ID}.json
@@ -143,49 +145,36 @@ EOF
     ((job_count++))
 }
 
-# ============================================================================
-# DoReFaNet (1 job)
-# ============================================================================
-submit_job \
-    "imgnet_dorefa" \
+# DoReFaNet
+submit_job "imgnet_dorefa" \
     "python3 -u src/Experiments/experiment_DoReFaNet.py" \
-    "DoReFaNet ConvNeXt, ${EPOCHS}ep, ${NUM_GPUS}x H100" \
+    "DoReFaNet ${EPOCHS}ep" \
     "./parameters_files/ImageNet/imagenet_convnext_doReFa_prod.json"
 
-# ============================================================================
-# TTQ (1 job)
-# ============================================================================
-submit_job \
-    "imgnet_ttq" \
+# TTQ
+submit_job "imgnet_ttq" \
     "python3 -u src/Experiments/experiment_TTQ.py" \
-    "TTQ ConvNeXt, ${EPOCHS}ep, ${NUM_GPUS}x H100" \
+    "TTQ ${EPOCHS}ep" \
     "./parameters_files/ImageNet/imagenet_convnext_TTQ_prod.json"
 
-# ============================================================================
-# pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
-# ============================================================================
+# pTTQ x3
 for k_val in 0.5 1.0 1.2; do
-    submit_job \
-        "imgnet_pttq_k${k_val}" \
+    submit_job "imgnet_pttq_k${k_val}" \
         "python3 -u src/Experiments/experiment_pTTQ.py --k_override=$k_val" \
-        "pTTQ ConvNeXt k=$k_val, ${EPOCHS}ep, ${NUM_GPUS}x H100" \
+        "pTTQ k=$k_val ${EPOCHS}ep" \
         "./parameters_files/ImageNet/imagenet_convnext_pTTQ_prod.json"
 done
 
-# ============================================================================
-# EMA-pTTQ (3 jobs: k=0.5, k=1.0, k=1.2)
-# ============================================================================
+# EMA-pTTQ x3
 for k_val in 0.5 1.0 1.2; do
-    submit_job \
-        "imgnet_emapttq_k${k_val}" \
+    submit_job "imgnet_emapttq_k${k_val}" \
         "python3 -u src/Experiments/experiment_pTTQ_experimental.py --k_override=$k_val" \
-        "EMA-pTTQ ConvNeXt k=$k_val, ${EPOCHS}ep, ${NUM_GPUS}x H100" \
+        "EMA-pTTQ k=$k_val ${EPOCHS}ep" \
         "./parameters_files/ImageNet/imagenet_convnext_experimental_prod.json"
 done
 
 echo ""
 echo "============================================"
 echo "Total jobs submitted: $job_count"
-echo "All jobs: 2-day limit, ${NUM_GPUS}x H100, ${EPOCHS} epochs"
 echo "Logs: ./logs/"
 echo "============================================"
