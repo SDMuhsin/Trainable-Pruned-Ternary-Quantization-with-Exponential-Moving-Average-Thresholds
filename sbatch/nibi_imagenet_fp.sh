@@ -81,9 +81,10 @@ sbatch_id=$(sbatch --parsable <<EOF
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --account=${ACCOUNT}
 
-module load gcc arrow scipy-stack cuda cudnn
+module load gcc arrow scipy-stack cuda
 source ./env/bin/activate
 
+export PYTHONNOUSERSITE=1
 export HF_HOME=\$(pwd)/data
 export TORCH_HOME=\$(pwd)/data
 export HF_DATASETS_OFFLINE=1
