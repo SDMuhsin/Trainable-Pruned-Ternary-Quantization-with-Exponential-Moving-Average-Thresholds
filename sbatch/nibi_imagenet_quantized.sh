@@ -99,7 +99,6 @@ submit_job() {
 module load gcc arrow scipy-stack cuda
 source ./env/bin/activate
 
-export PYTHONNOUSERSITE=1
 export HF_HOME=\$(pwd)/data
 export TORCH_HOME=\$(pwd)/data
 export HF_DATASETS_OFFLINE=1
