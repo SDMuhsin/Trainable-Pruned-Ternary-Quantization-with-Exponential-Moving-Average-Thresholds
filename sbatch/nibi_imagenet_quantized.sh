@@ -68,11 +68,14 @@ if [[ ! -d "$FP_MODEL_DIR" ]]; then
 fi
 
 CPUS=$((NUM_GPUS * 12))
+# Quantized methods need more RAM than FP: FP copies, extra optimizers (Adamax
+# for fp_copies + scaling_factors + thresholds), and STE gradient temporaries
+# for all 58 layers, plus DataLoader fork() overhead.  Use 80GB/GPU vs FP's 64GB.
 if [[ "$NUM_GPUS" -eq 8 ]]; then
     MEM_LINE="#SBATCH --mem=0"
     WHOLE_NODE="#SBATCH --nodes=1 --exclusive"
 else
-    MEM_LINE="#SBATCH --mem=$((NUM_GPUS * 64000))M"
+    MEM_LINE="#SBATCH --mem=$((NUM_GPUS * 80000))M"
     WHOLE_NODE=""
 fi
 job_count=0

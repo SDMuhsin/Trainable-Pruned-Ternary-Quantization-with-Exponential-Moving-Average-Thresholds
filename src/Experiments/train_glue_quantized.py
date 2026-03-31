@@ -2,7 +2,7 @@
 """
 BERT Ternary Quantization on GLUE Tasks.
 
-Supports: FP baseline, TTQ, pTTQ, EMA-pTTQ.
+Supports: FP baseline, TTQ, pTTQ, EMA-pTTQ, SparseGPT.
 Tasks: CoLA, MRPC, RTE, STS-B, SST-2, QNLI.
 Runs median-of-5 (seeds 41-45) and saves results to ./results/glue_ternary.csv.
 
@@ -54,6 +54,7 @@ from src.utils.model_compression import (
     pruning_function_pTTQ,
     pruning_function_pTTQ_experimental,
 )
+from src.utils.sparsegpt import apply_sparsegpt_to_bert
 
 ###############################################################################
 #                              Constants                                      #
@@ -493,7 +494,9 @@ def run_single_seed(args, seed: int) -> Dict:
                              collate_fn=collator)
 
     # --- Warmup + Quantization Setup ---
-    warmup_epochs = args.warmup_epochs if method != "fp" else 0
+    # SparseGPT is a PTQ method: fine-tune as FP, then prune one-shot after
+    is_ptq = (method == "sparsegpt")
+    warmup_epochs = args.warmup_epochs if (method != "fp" and not is_ptq) else 0
     total_epochs = warmup_epochs + args.epochs
     total_steps = len(train_loader) * total_epochs
     lr_warmup_steps = int(0.1 * total_steps)
@@ -506,7 +509,7 @@ def run_single_seed(args, seed: int) -> Dict:
     quant_ids = set()
     quantization_active = False
 
-    if method != "fp":
+    if method not in ("fp", "sparsegpt"):
         # Reset EMA state between seeds
         if hasattr(pruning_function_pTTQ_experimental, "ema_states"):
             del pruning_function_pTTQ_experimental.ema_states
@@ -599,8 +602,8 @@ def run_single_seed(args, seed: int) -> Dict:
             else:
                 optimizer_t = torch.optim.Adamax(thresholds, lr=thresh_lr)
 
-    # If no warmup, apply quantization immediately
-    if method != "fp" and warmup_epochs == 0:
+    # If no warmup, apply quantization immediately (not for PTQ methods)
+    if method not in ("fp", "sparsegpt") and warmup_epochs == 0:
         apply_quantization()
         quantization_active = True
 
@@ -616,7 +619,7 @@ def run_single_seed(args, seed: int) -> Dict:
 
     for epoch in range(total_epochs):
         # Transition from warmup to quantized training
-        if (method != "fp" and not quantization_active
+        if (method not in ("fp", "sparsegpt") and not quantization_active
                 and epoch == warmup_epochs):
             logger.info(f"[seed {seed}] Warmup complete. Applying quantization...")
             apply_quantization()
@@ -735,6 +738,71 @@ def run_single_seed(args, seed: int) -> Dict:
                 compute_per_layer_sparsity(model, layer_names) if method != "fp" else {}
             )
 
+    # --- SparseGPT: apply one-shot pruning after FP fine-tuning ---
+    if method == "sparsegpt":
+        wbits = args.sparsegpt_wbits
+        quant_tag = f" + {wbits}-bit" if wbits < 16 else ""
+        logger.info(f"[seed {seed}] Applying SparseGPT pruning "
+                    f"(sparsity={args.sparsity:.0%}{quant_tag})...")
+        sparsegpt_layer_stats = apply_sparsegpt_to_bert(
+            model=model,
+            dataloader=train_loader,
+            device=device,
+            sparsity=args.sparsity,
+            nsamples=args.sparsegpt_nsamples,
+            blocksize=args.sparsegpt_blocksize,
+            percdamp=args.sparsegpt_percdamp,
+            wbits=wbits,
+        )
+
+        # Identify pruned layer names for sparsity/compression stats
+        # Names from apply_sparsegpt_to_bert are full module paths (e.g.
+        # bert.encoder.layer.0.attention.self.query); add .weight for param names
+        layer_param_names = [f"{n}.weight" for n in sparsegpt_layer_stats.keys()]
+
+        # Re-evaluate after pruning
+        model.eval()
+        metric_post = evaluate.load("glue", args.task_name)
+        all_preds_post = []
+        all_refs_post = []
+        for batch in eval_loader:
+            batch = {bk: bv.to(device, non_blocking=True) for bk, bv in batch.items()}
+            with torch.no_grad():
+                outputs = model(**batch)
+            if is_regression:
+                preds = outputs.logits.squeeze(-1)
+            else:
+                preds = outputs.logits.argmax(dim=-1)
+            all_preds_post.append(preds.cpu())
+            all_refs_post.append(batch["labels"].cpu())
+            metric_post.add_batch(predictions=preds.cpu(),
+                                  references=batch["labels"].cpu())
+
+        eval_metric_post = metric_post.compute()
+        prim_post = primary_metric(args.task_name, eval_metric_post)
+
+        # Compute sparsity over pruned layers
+        total_params = 0
+        zero_params = 0
+        per_layer_sp = {}
+        for pname, param in model.named_parameters():
+            if pname in layer_param_names:
+                total_params += param.numel()
+                z = (param.data == 0).sum().item()
+                zero_params += z
+                per_layer_sp[pname] = z / param.numel()
+        post_sparsity = zero_params / total_params if total_params > 0 else 0.0
+
+        logger.info(f"[seed {seed}] SparseGPT post-prune: {eval_metric_post} | "
+                    f"sparsity={post_sparsity:.1%}")
+
+        # Override best results with post-pruning evaluation
+        best_metric_val = prim_post
+        best_metric_dict = eval_metric_post.copy()
+        best_sparsity = post_sparsity
+        best_per_layer_sparsity = per_layer_sp
+        layer_names = layer_param_names  # for compression stats
+
     # Compute final compression stats
     comp_stats = compute_compression_stats(model, layer_names) if method != "fp" else {}
     peak_gpu_mb = torch.cuda.max_memory_allocated(device) / (1024 * 1024)
@@ -764,7 +832,7 @@ def parse_args():
     parser.add_argument("--task_name", type=str, required=True,
                         choices=["cola", "mrpc", "rte", "stsb", "sst2", "qnli"])
     parser.add_argument("--method", type=str, required=True,
-                        choices=["fp", "ttq", "pttq", "ema_pttq"])
+                        choices=["fp", "ttq", "pttq", "ema_pttq", "sparsegpt"])
     parser.add_argument("--model_name", type=str, default="bert-base-uncased")
 
     # Training
@@ -805,6 +873,19 @@ def parse_args():
     parser.add_argument("--smart_initial_scales", action="store_true",
                         help="Compute initial w_p/w_n from FP weight stats "
                              "(recommended for BERT/LayerNorm architectures)")
+
+    # SparseGPT
+    parser.add_argument("--sparsity", type=float, default=0.5,
+                        help="Target sparsity for SparseGPT (fraction of zeros)")
+    parser.add_argument("--sparsegpt_nsamples", type=int, default=128,
+                        help="Number of calibration samples for SparseGPT Hessian")
+    parser.add_argument("--sparsegpt_blocksize", type=int, default=128,
+                        help="Block size for SparseGPT column sweep")
+    parser.add_argument("--sparsegpt_percdamp", type=float, default=0.01,
+                        help="Hessian dampening for SparseGPT")
+    parser.add_argument("--sparsegpt_wbits", type=int, default=16,
+                        help="Weight bit-width for SparseGPT quantization "
+                             "(16 = no quantization, 3/4/8 = joint prune+quant)")
 
     # Infrastructure
     parser.add_argument("--device", type=str, default="cuda:1")
@@ -902,9 +983,10 @@ def main():
         "lr_thresh": args.lr_thresh if args.lr_thresh is not None else args.lr_quant,
         "optimizer_thresh": args.optimizer_thresh,
         "batch_size": args.batch_size,
-        "warmup_epochs": args.warmup_epochs if args.method != "fp" else "N/A",
+        "warmup_epochs": args.warmup_epochs if args.method not in ("fp", "sparsegpt") else "N/A",
         "epochs": args.epochs,
-        "alpha": args.alpha if args.method != "fp" else "N/A",
+        "sparsity_target": args.sparsity if args.method == "sparsegpt" else "N/A",
+        "alpha": args.alpha if args.method not in ("fp", "sparsegpt") else "N/A",
         "t": args.t if args.method == "ttq" else "N/A",
         "init_x": args.init_x if args.method in ("pttq", "ema_pttq") else "N/A",
         "init_y": args.init_y if args.method in ("pttq", "ema_pttq") else "N/A",
